@@ -1,0 +1,596 @@
+.page {
+    padding: 12px 20px 16px;
+    max-width: 100%;
+    overflow: visible;
+}
+
+.shell {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+    min-width: 0;
+    width: 100%;
+    overflow: visible;
+}
+
+.sidebar {
+    background: #ffffff;
+    border: 1px solid #dbe4f0;
+    border-radius: 6px;
+    padding: 6px;
+    box-shadow: none;
+    position: sticky;
+    top: 12px;
+    align-self: start;
+    height: auto;
+    max-height: min(520px, calc(100vh - 24px));
+    overflow: hidden;
+    z-index: 1;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    contain: layout;
+}
+
+.navList {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: min(500px, calc(100vh - 44px));
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+    -ms-overflow-style: auto;
+    padding-right: 2px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.navList::-webkit-scrollbar {
+    display: none;
+}
+
+.navItem,
+.navItemActive {
+    width: 100%;
+    max-width: 100%;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    padding: 5px 7px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    text-align: left;
+    text-decoration: none;
+    transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease, opacity 0.18s ease;
+    min-width: 0;
+    min-height: 28px;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.navItem:hover,
+.navItemActive:hover {
+    opacity: 0.5;
+}
+
+
+.navItemActive {
+    background: #eff6ff;
+    border-color: #93c5fd;
+    box-shadow: none;
+}
+
+/* Active-page indicator: only the current subpage carries the underline. */
+.navItemActive .navLabel {
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 3px;
+}
+
+.navIcon {
+    width: 16px;
+    height: 16px;
+    border-radius: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    color: #1e3a8a;
+    flex-shrink: 0;
+}
+
+.navIcon svg {
+    width: 10px;
+    height: 10px;
+}
+
+.navItemActive .navIcon {
+    background: transparent;
+    color: #1d4ed8;
+}
+
+.navCopy {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.navLabel {
+    font-size: 11px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.15;
+    white-space: normal;
+}
+
+.navCaption {
+    display: none;
+}
+
+.navBadge {
+    display: none;
+}
+
+.content {
+    min-width: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.contentIntro {
+    background: #ffffff;
+    border: 1px solid #dbe4f0;
+    border-radius: 6px;
+    padding: 18px 22px;
+    box-shadow: none;
+    display: grid;
+    grid-template-columns: minmax(220px, 0.95fr) minmax(0, 1.35fr);
+    align-items: start;
+    gap: 18px;
+    min-width: 0;
+}
+
+.contentIntroHeader {
+    min-width: 0;
+    display: grid;
+    align-content: start;
+    gap: 8px;
+}
+
+.contentIntroDetails {
+    min-width: 0;
+    display: grid;
+    align-content: start;
+    justify-items: start;
+    gap: 12px;
+}
+
+.contentEyebrow {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #64748b;
+    margin-bottom: 2px;
+}
+
+.contentTitle {
+    margin: 0;
+    font-size: 14px;
+    color: #0f172a;
+}
+
+.contentText {
+    margin: 0;
+    max-width: min(100%, 62ch);
+    color: #475569;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.lockdownPanel {
+    width: 100%;
+    box-sizing: border-box;
+    min-width: 0;
+    border: 1px solid #dbe4f0;
+    border-radius: 6px;
+    background: #ffffff;
+    padding: 14px;
+    display: grid;
+    gap: 10px;
+}
+
+.lockdownStatusRow {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: space-between;
+}
+
+.lockdownControlGroup {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.lockdownBadge {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border-radius: 999px;
+    padding: 5px 10px;
+}
+
+.lockdownBadgeActive {
+    color: #991b1b;
+    background: #fee2e2;
+    border: 1px solid #fecaca;
+}
+
+.lockdownBadgeInactive {
+    color: #166534;
+    background: #dcfce7;
+    border: 1px solid #bbf7d0;
+}
+
+.lockdownAction {
+    border: 1px solid transparent;
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    padding: 0;
+    color: #ffffff;
+    cursor: pointer;
+    opacity: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease;
+}
+
+.lockdownEditAction {
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    color: #334155;
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    padding: 0;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+
+
+.lockdownEditAction:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.lockdownAction svg {
+    width: 14px;
+    height: 14px;
+}
+
+
+.lockdownAction:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.lockdownActionDisable {
+    border-color: #99f6e4;
+    background: #0f766e;
+    box-shadow: none;
+}
+
+.lockdownActionEnable {
+    border-color: #fca5a5;
+    background: #b91c1c;
+    box-shadow: none;
+}
+
+.lockdownCountdownEditor {
+    display: grid;
+    gap: 6px;
+    padding: 8px 10px;
+    border: 1px dashed #cbd5e1;
+    border-radius: 10px;
+    background: #f8fafc;
+}
+
+.lockdownCountdownLabel {
+    font-size: 12px;
+    font-weight: 600;
+    color: #475569;
+}
+
+.lockdownCountdownControls {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.lockdownCountdownAdjust {
+    width: 26px;
+    height: 26px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #334155;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.lockdownCountdownInput {
+    width: 62px;
+    height: 28px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 0 8px;
+    font-size: 12px;
+    color: #0f172a;
+}
+
+.lockdownCountdownUnit {
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 600;
+}
+
+.lockdownCountdownNotice {
+    display: grid;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid #bfdbfe;
+    border-radius: 10px;
+    background: #eff6ff;
+}
+
+.lockdownCountdownText {
+    font-size: 12px;
+    color: #1e40af;
+    font-weight: 600;
+}
+
+.lockdownCountdownButtons {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.lockdownNowButton,
+.lockdownCancelButton {
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.lockdownNowButton {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+    color: #ffffff;
+}
+
+.lockdownCancelButton {
+    background: #ffffff;
+    border-color: #cbd5e1;
+    color: #334155;
+}
+
+.lockdownReason {
+    margin: 0;
+    font-size: 12px;
+    color: #475569;
+    line-height: 1.5;
+}
+
+.lockdownReasonLabel {
+    color: #334155;
+    font-weight: 600;
+}
+
+.contentBody {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    overflow: visible;
+}
+
+/* Keep wide settings tables inside their cards without cutting off controls. */
+.contentBody :global(div:has(> table.llb-table)) {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto !important;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    scrollbar-gutter: stable;
+}
+
+/* The settings actions must remain reachable even when the table is wider than
+   the available content column. */
+.contentBody :global(table.llb-table th.llb-actions-heading),
+.contentBody :global(table.llb-table td.llb-actions) {
+    position: sticky;
+    right: 0;
+    min-width: 132px;
+    white-space: nowrap;
+}
+
+.contentBody :global(table.llb-table th.llb-actions-heading) {
+    z-index: 5;
+    background: #f8fafc;
+    box-shadow: -1px 0 0 #e2e8f0, -10px 0 18px rgba(15, 23, 42, 0.06);
+}
+
+.contentBody :global(table.llb-table td.llb-actions) {
+    z-index: 3;
+    background: #ffffff;
+    box-shadow: -1px 0 0 #eef2f7, -10px 0 18px rgba(15, 23, 42, 0.05);
+}
+
+.contentBody :global(table.llb-table tbody tr:hover td.llb-actions) {
+    background: #f1f8ff;
+}
+
+/* Settings are administrative screens: keep every row action visible instead
+   of revealing it only after hover. */
+.contentBody :global(table.llb-table td.llb-actions > *) {
+    opacity: 1 !important;
+}
+
+.embedPanel {
+    background: var(--card-bg, #fdfdfc);
+    border: 1px solid #dbe4f0;
+    border-radius: 6px;
+    box-shadow: none;
+    overflow: hidden;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+}
+
+.embedPanelFullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    background: #ffffff;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+}
+
+.embedFrame {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    border: 0;
+    display: block;
+    background: #ffffff;
+}
+
+.embedFrameFullscreen {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    border: 0;
+    display: block;
+    background: #ffffff;
+}
+
+@media (max-width: 1180px) {
+    .shell {
+        grid-template-columns: 1fr;
+    }
+
+    .sidebar {
+        position: static;
+        max-height: none;
+    }
+
+    .navList {
+        max-height: none;
+    }
+
+    .contentIntro {
+        grid-template-columns: 1fr;
+        gap: 14px;
+    }
+
+    .lockdownPanel {
+        max-width: 100%;
+    }
+}
+
+@media (max-width: 640px) {
+    .page {
+        padding: 12px;
+    }
+
+    .contentIntro {
+        padding: 16px;
+    }
+}
+
+/* ── Hover states ─────────────────────────────────────────────────── */
+.contentIntro {
+    transition: border-color 0.15s ease;
+}
+
+.contentIntro:hover {
+    border-color: #c7d2e6;
+    box-shadow: none;
+}
+
+.lockdownPanel {
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.lockdownPanel:hover {
+    border-color: #c7d2e6;
+    box-shadow: none;
+}
+
+/* Settings-only information design: flat surfaces, compact controls and
+   tabular data. Modal dialogs remain the only elevated elements. */
+.contentBody :global([style*="box-shadow"]:not([role="dialog"])) {
+    box-shadow: none !important;
+}
+
+.contentBody :global(button:not([role="switch"])),
+.contentBody :global(input),
+.contentBody :global(select),
+.contentBody :global(textarea) {
+    border-radius: 5px !important;
+}
+
+.contentBody :global(section) {
+    border-radius: 6px !important;
+    box-shadow: none !important;
+}
+
+.contentBody :global(table) {
+    font-variant-numeric: tabular-nums;
+}
+
+.contentBody :global(.settings-data-section) {
+    border-radius: 6px !important;
+    box-shadow: none !important;
+}
+
+@media (max-width: 760px) {
+    .contentBody :global(.settings-data-section > div) {
+        grid-template-columns: 1fr !important;
+    }
+
+    .contentBody :global(.settings-data-section > div > div) {
+        padding: 12px 0 !important;
+        border-right: 0 !important;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .contentBody :global(.settings-data-section > div > div:last-child) {
+        border-bottom: 0;
+    }
+}

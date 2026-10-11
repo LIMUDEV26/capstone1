@@ -1,0 +1,604 @@
+.page {
+    width: 100%;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 18px 20px 28px;
+    color: #172033;
+}
+
+.workspace {
+    display: grid;
+    grid-template-columns: 238px minmax(0, 1fr);
+    min-height: calc(100vh - 112px);
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    border-radius: 20px;
+    background: #ffffff;
+    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.07);
+}
+
+.identityRail {
+    padding: 30px 22px;
+    border-right: 1px solid #e8edf4;
+    background: linear-gradient(180deg, #fbfdff 0%, #f7f9fc 100%);
+}
+
+.identitySticky {
+    position: sticky;
+    top: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.avatar {
+    width: 116px;
+    height: 116px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    color: #ffffff;
+    font-size: 34px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    background: linear-gradient(145deg, #4f46e5, #2563eb 55%, #0ea5e9);
+    border: 5px solid #ffffff;
+    box-shadow: 0 14px 32px rgba(37, 99, 235, 0.22);
+}
+
+.avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.name {
+    margin: 16px 0 3px;
+    font-size: 21px;
+    line-height: 1.2;
+    color: #111827;
+}
+
+.username,
+.email {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.username {
+    color: #64748b;
+    font-size: 12px;
+}
+
+.email {
+    margin-top: 8px;
+    color: #475569;
+    font-size: 12px;
+}
+
+.roleBadge {
+    margin-top: 11px;
+    padding: 5px 10px;
+    border: 1px solid #c7d2fe;
+    border-radius: 999px;
+    color: #3730a3;
+    background: #eef2ff;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.railDivider {
+    width: 100%;
+    height: 1px;
+    margin: 22px 0;
+    background: #e2e8f0;
+}
+
+.railMetric {
+    width: 100%;
+    margin-bottom: 16px;
+    text-align: left;
+}
+
+.metricTop {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 7px;
+    color: #475569;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.progressTrack {
+    height: 7px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #e2e8f0;
+}
+
+.progressValue {
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #2563eb, #38bdf8);
+}
+
+.railFacts {
+    width: 100%;
+    display: grid;
+    gap: 10px;
+}
+
+.railFact {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    color: #64748b;
+    font-size: 11px;
+}
+
+.railFact strong {
+    max-width: 125px;
+    overflow: hidden;
+    color: #1e293b;
+    font-size: 11px;
+    text-align: right;
+    text-overflow: ellipsis;
+    text-transform: capitalize;
+    white-space: nowrap;
+}
+
+.primaryButton,
+.secondaryButton,
+.iconButton {
+    border: 0;
+    cursor: pointer;
+    font: inherit;
+}
+
+.primaryButton {
+    width: 100%;
+    min-height: 38px;
+    margin-top: 20px;
+    padding: 9px 13px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    color: #ffffff;
+    background: #2563eb;
+    box-shadow: 0 9px 20px rgba(37, 99, 235, 0.22);
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.primaryButton:disabled {
+    cursor: not-allowed;
+    opacity: 0.58;
+    box-shadow: none;
+}
+
+.main {
+    min-width: 0;
+    padding: 24px 28px 32px;
+}
+
+.topbar {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.eyebrow {
+    margin-bottom: 5px;
+    color: #2563eb;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+}
+
+.pageTitle {
+    margin: 0;
+    color: #111827;
+    font-size: 25px;
+    line-height: 1.2;
+    letter-spacing: -0.035em;
+}
+
+.subtitle {
+    margin: 7px 0 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.statusPill {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 11px;
+    border: 1px solid #bbf7d0;
+    border-radius: 999px;
+    color: #166534;
+    background: #f0fdf4;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: capitalize;
+}
+
+.statusDot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #22c55e;
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.14);
+}
+
+.tabs {
+    display: flex;
+    gap: 24px;
+    margin: 22px 0 20px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.tab {
+    position: relative;
+    padding: 0 2px 11px;
+    border: 0;
+    color: #64748b;
+    background: transparent;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.tabActive {
+    color: #1d4ed8;
+}
+
+.tabActive::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    bottom: -1px;
+    left: 0;
+    height: 2px;
+    border-radius: 999px 999px 0 0;
+    background: #2563eb;
+}
+
+.notice {
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    border: 1px solid #bfdbfe;
+    border-radius: 12px;
+    color: #1e3a8a;
+    background: #eff6ff;
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.noticePending {
+    border-color: #fde68a;
+    color: #92400e;
+    background: #fffbeb;
+}
+
+.noticeApproved {
+    border-color: #bbf7d0;
+    color: #166534;
+    background: #f0fdf4;
+}
+
+.noticeRejected {
+    border-color: #fecaca;
+    color: #991b1b;
+    background: #fef2f2;
+}
+
+.noticeTitle {
+    margin-bottom: 3px;
+    color: currentColor;
+    font-weight: 800;
+}
+
+.contentGrid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(250px, 0.75fr);
+    gap: 16px;
+}
+
+.stack {
+    display: grid;
+    gap: 16px;
+}
+
+.card {
+    min-width: 0;
+    padding: 18px;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 7px 22px rgba(15, 23, 42, 0.035);
+}
+
+.cardHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.cardTitle {
+    margin: 0;
+    color: #1e293b;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.cardCaption {
+    margin: 4px 0 0;
+    color: #94a3b8;
+    font-size: 10px;
+}
+
+.iconButton {
+    width: 30px;
+    height: 30px;
+    border: 1px solid #dbe4f0;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #2563eb;
+    background: #f8fafc;
+}
+
+.iconButton:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
+.detailList {
+    margin: 0;
+}
+
+.detailRow {
+    display: grid;
+    grid-template-columns: minmax(115px, 0.36fr) minmax(0, 1fr);
+    gap: 16px;
+    padding: 11px 0;
+    border-top: 1px solid #edf1f6;
+}
+
+.detailRow:first-child {
+    border-top: 0;
+}
+
+.detailRow dt {
+    color: #64748b;
+    font-size: 11px;
+}
+
+.detailRow dd {
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: #1e293b;
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.documentGrid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.documentCard {
+    min-height: 98px;
+    padding: 13px;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 12px;
+    background: #fbfdff;
+}
+
+.documentIcon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    color: #1d4ed8;
+    background: #dbeafe;
+    font-size: 10px;
+    font-weight: 900;
+}
+
+.documentName {
+    color: #334155;
+    font-size: 11px;
+    font-weight: 750;
+}
+
+.documentStatus {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: #b91c1c;
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.documentStatusSubmitted {
+    color: #15803d;
+}
+
+.documentStatusDot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.actionList {
+    display: grid;
+    gap: 9px;
+}
+
+.secondaryButton {
+    min-height: 38px;
+    padding: 9px 12px;
+    border: 1px solid #dbe4f0;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: #334155;
+    background: #ffffff;
+    font-size: 11px;
+    font-weight: 750;
+    text-align: left;
+}
+
+.secondaryButton:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.arrow {
+    color: #94a3b8;
+    font-size: 15px;
+}
+
+.identifierGrid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.identifier {
+    padding: 13px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #f8fafc;
+}
+
+.identifierLabel {
+    margin-bottom: 5px;
+    color: #64748b;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.identifierValue {
+    color: #1e293b;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.emptyValue {
+    color: #94a3b8;
+    font-family: inherit;
+    font-weight: 600;
+}
+
+.accessHero {
+    padding: 22px;
+    border: 1px solid #dbeafe;
+    border-radius: 14px;
+    background: radial-gradient(circle at top right, rgba(59, 130, 246, 0.14), transparent 38%), #f8fbff;
+}
+
+.accessHero h3 {
+    margin: 0 0 7px;
+    color: #172554;
+    font-size: 16px;
+}
+
+.accessHero p {
+    margin: 0;
+    color: #475569;
+    font-size: 12px;
+    line-height: 1.65;
+}
+
+@media (max-width: 900px) {
+    .workspace {
+        grid-template-columns: 1fr;
+    }
+
+    .identityRail {
+        border-right: 0;
+        border-bottom: 1px solid #e8edf4;
+    }
+
+    .identitySticky {
+        position: static;
+    }
+
+    .railFacts,
+    .railMetric,
+    .primaryButton {
+        max-width: 460px;
+    }
+
+    .contentGrid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .page {
+        padding: 10px;
+    }
+
+    .workspace {
+        border-radius: 15px;
+    }
+
+    .identityRail,
+    .main {
+        padding: 20px 16px;
+    }
+
+    .topbar {
+        flex-direction: column;
+    }
+
+    .tabs {
+        gap: 18px;
+        overflow-x: auto;
+    }
+
+    .documentGrid,
+    .identifierGrid {
+        grid-template-columns: 1fr;
+    }
+
+    .detailRow {
+        grid-template-columns: 1fr;
+        gap: 4px;
+    }
+}

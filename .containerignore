@@ -1,0 +1,21 @@
+# .containerignore — Podman's native build-context filter (same syntax as .dockerignore).
+# Kept in sync with .dockerignore.
+node_modules
+.next
+.git
+backups
+uploads
+*.sql
+mcp-servers
+electron
+my-app
+ui-ux-pro-max-skill
+test-data
+deploy-hostinger
+runtime
+release
+docs
+*.log
+*.tsbuildinfo
+.env
+.env.local

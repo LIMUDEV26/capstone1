@@ -1,0 +1,70 @@
+# Capstone1 — Podman / Docker Compose orchestration
+#
+# Works with:
+#   podman compose up -d        (Podman 4.7+; delegates to podman-compose or docker-compose)
+#   podman-compose up -d
+#   docker compose up -d        (identical, if you ever switch back)
+#
+# Secrets live in .env (copy .env.example -> .env and fill in real values).
+
+name: capstone1
+
+
+services:
+  db:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.mysql
+    image: localhost/capstone1-db:latest
+    container_name: capstone1-db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      # database/Capstone1.sql already contains "CREATE DATABASE IF NOT EXISTS llb";
+      # MYSQL_USER is granted ALL privileges on MYSQL_DATABASE automatically.
+      MYSQL_DATABASE: llb
+      MYSQL_USER: ${DB_USER:-llb_app}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+    volumes:
+      - capstone1-mysql-data:/var/lib/mysql
+    # Publish to localhost only so XAMPP/phpMyAdmin can still reach it, if needed.
+    ports:
+      - "127.0.0.1:3307:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: localhost/capstone1-web:latest
+    container_name: capstone1-web
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # api/config.php reads these via getenv(); "db" resolves inside the podman network.
+      DB_HOST: db
+      DB_NAME: llb
+      DB_USER: ${DB_USER:-llb_app}
+      DB_PASS: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-*}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:8080}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      SMTP_DEBUG: ${SMTP_DEBUG:-0}
+    ports:
+      - "8080:8080"
+    volumes:
+      # Persist user uploads outside the image.
+      - capstone1-uploads:/var/www/html/capstone1/uploads
+    restart: unless-stopped
+
+volumes:
+  capstone1-mysql-data:
+  capstone1-uploads:

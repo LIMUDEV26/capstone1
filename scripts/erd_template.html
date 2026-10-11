@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLB Accountants — Logical-Relational ERD (all tables)</title>
+<script>
+/* Safety net: shows any script failure on screen instead of a blank canvas. */
+window.__bootErr = function (msg) {
+  var b = document.getElementById("boot");
+  if (!b) return;
+  b.style.display = "block";
+  b.innerHTML = msg;
+};
+window.addEventListener("error", function (e) {
+  window.__bootErr("<b>Script error — diagram not drawn.</b><br>" +
+    (e.message || "") + (e.lineno ? "<br>line " + e.lineno : "") +
+    "<br><br>If you opened <code>scripts/erd_template.html</code>, that is the raw " +
+    "template. Open the generated file <b>Database_ERD.html</b> (repo root) instead.");
+});
+</script>
+<style>
+  :root{ --bar:#1f3a5f; --bar2:#2d5288; --ink:#1b2430; --line:#c9d4e2; }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; margin:0; font-family:Segoe UI,system-ui,Arial,sans-serif; color:var(--ink); }
+  body{ display:flex; flex-direction:column; background:#eef2f7; }
+  #bar{ background:var(--bar); color:#fff; padding:6px 10px; display:flex; flex-wrap:wrap;
+        gap:6px; align-items:center; font-size:13px; }
+  #bar .title{ font-weight:700; margin-right:8px; }
+  #bar .sep{ width:1px; height:22px; background:#ffffff55; margin:0 4px; }
+  button{ background:var(--bar2); color:#fff; border:0; border-radius:4px; padding:5px 9px;
+          font-size:12.5px; cursor:pointer; }
+  button:hover{ background:#3c66a5; }
+  button.warn{ background:#8a2f2f; }
+  button.on{ background:#d98b0a; }
+  input[type=text]{ border:1px solid var(--line); border-radius:4px; padding:5px 7px;
+                    font-size:12.5px; }
+  #zoomPct{ min-width:46px; text-align:center; font-variant-numeric:tabular-nums; }
+  #wrap{ position:relative; flex:1; overflow:hidden; }
+  canvas{ position:absolute; inset:0; width:100%; height:100%; display:block;
+          background:#f7f9fc; cursor:grab; }
+  canvas.dragging{ cursor:grabbing; }
+  #hint{ position:absolute; left:10px; bottom:10px; background:#ffffffee; border:1px solid var(--line);
+         border-radius:6px; padding:7px 10px; font-size:12px; max-width:470px; line-height:1.5; }
+  #legend{ position:absolute; right:10px; bottom:10px; background:#ffffffee; border:1px solid var(--line);
+           border-radius:6px; padding:7px 10px; font-size:12px; line-height:1.7; }
+  .chip{ display:inline-block; min-width:22px; text-align:center; border-radius:3px; color:#fff;
+         font-size:10px; font-weight:700; padding:1px 3px; margin-right:4px; }
+  .pk{ background:#b8860b; } .fk{ background:#2563eb; } .nn{ background:#64748b; }
+  #status{ background:#fff; border-top:1px solid var(--line); font-size:12px; padding:4px 10px;
+           display:flex; gap:16px; color:#445; }
+  #editor{ position:absolute; right:10px; top:10px; width:272px; background:#fff;
+           border:1px solid var(--line); border-radius:8px; padding:12px; display:none;
+           box-shadow:0 8px 24px #0002; font-size:13px; }
+  #editor h4{ margin:0 0 8px; font-size:13px; color:var(--bar); }
+  #editor label{ display:block; margin:6px 0 2px; font-size:11.5px; color:#556; }
+  #editor input[type=text]{ width:100%; }
+  #editor .row{ display:flex; gap:12px; margin-top:8px; }
+  #editor .row label{ display:flex; gap:4px; align-items:center; margin:0; font-size:12px; }
+  #editor .btns{ display:flex; gap:6px; margin-top:10px; }
+</style>
+</head>
+<body>
+
+<div id="bar">
+  <span class="title">LLB ERD — Logical-Relational Model</span>
+  <button id="btnZoomOut" title="Zoom out">−</button>
+  <span id="zoomPct">100%</span>
+  <button id="btnZoomIn" title="Zoom in">+</button>
+  <button id="btnFit">Fit all</button>
+  <button id="btn100">100%</button>
+  <input type="text" id="search" placeholder="Find table… (Enter)" style="width:150px">
+  <span class="sep"></span>
+  <button id="btnAddTable">+ Table</button>
+  <button id="btnAddCol">+ Column</button>
+  <button id="btnLink" title="Click child FK column, then parent table">⇄ Link FK</button>
+  <button id="btnDelete" class="warn">Delete</button>
+  <button id="btnResetLayout">Reset layout</button>
+  <button id="btnResetAll" class="warn">Reload schema</button>
+  <span class="sep"></span>
+  <button id="btnPng">Export PNG</button>
+  <button id="btnJpg">Export JPG</button>
+  <button id="btnJpeg">Export JPEG</button>
+  <button id="btnWebp">Export WEBP</button>
+  <span id="saveTag" style="margin-left:auto; opacity:.85">auto-saved locally</span>
+</div>
+
+<div id="wrap">
+  <canvas id="c"></canvas>
+  <div id="boot" style="display:none; position:absolute; left:50%; top:46%;
+       transform:translate(-50%,-50%); width:min(680px,86%); background:#fff3f3;
+       border:1px solid #e2a5a5; border-radius:10px; padding:18px 22px;
+       font-size:14px; line-height:1.6; color:#8a2f2f; box-shadow:0 8px 24px #0002;">
+  </div>
+  <noscript><div style="position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);
+    background:#fff3f3;border:1px solid #e2a5a5;border-radius:10px;padding:18px 22px;
+    font:14px Segoe UI,Arial;color:#8a2f2f">JavaScript is disabled — the ERD is drawn with
+    JavaScript. Enable it and reload this file.</div></noscript>
+  <div id="hint"><b>How to edit:</b> drag tables to arrange · click a line → drag its orange
+  dot left/right to move the elbow, up/down to lift the middle of the path (the relationship
+  never breaks) · double-click a table name or a
+  column to edit it · + Table / + Column to add fields · ⇄ Link FK: click the child column,
+  then the parent table · Delete removes the selected table/column/relationship · wheel = zoom ·
+  drag background = pan · double-click empty space clears highlights · edits auto-save here.</div>
+  <div id="legend">
+    <span class="chip pk">PK</span> Primary key<br>
+    <span class="chip fk">FK</span> Foreign key (relationship)<br>
+    <span class="chip nn">NN</span> Not null<br>
+    <b>1</b> = one&nbsp;&nbsp;·&nbsp;&nbsp;<b>N</b> = many<br>
+    <span style="color:#7b8794">1:N</span> one-to-many (FK) ·
+    <span style="color:#7b8794">M:N</span> many-to-many (junction bridge)
+  </div>
+  <div id="editor">
+    <h4 id="edTitle">Edit</h4>
+    <div id="edTableFields">
+      <label>Table name</label><input type="text" id="edTableName">
+    </div>
+    <div id="edColFields" style="display:none">
+      <label>Column name</label><input type="text" id="edColName">
+      <label>Data type</label><input type="text" id="edColType" placeholder="VARCHAR(100)">
+      <div class="row">
+        <label><input type="checkbox" id="edPk"> PK</label>
+        <label><input type="checkbox" id="edNn"> NN</label>
+        <label><input type="checkbox" id="edUq"> UQ</label>
+        <label><input type="checkbox" id="edFk"> FK</label>
+      </div>
+    </div>
+    <div class="btns">
+      <button id="edSave">Save</button>
+      <button id="edCancel">Cancel</button>
+      <button id="edDelete" class="warn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div id="status">
+  <span id="stCounts"></span><span id="stSel">Nothing selected</span>
+  <span id="stMode"></span>
+  <span style="margin-left:auto">Self-contained file — schema from database/Capstone1.sql</span>
+</div>
+
+<script>
+"use strict";
+const SCHEMA = /*__ERD_DATA__*/ null;
+
+/* ---------------- boot guard ---------------- */
+if(!SCHEMA || !Array.isArray(SCHEMA.tables) || !SCHEMA.tables.length){
+  window.__bootErr("<b>No schema data found.</b><br>You opened the raw template " +
+    "(<code>scripts/erd_template.html</code>) or the generated file is incomplete.<br>" +
+    "Open <b>Database_ERD.html</b> from the repo root, or regenerate it with " +
+    "<code>python scripts/generate_erd_html.py</code>.");
+  throw new Error("ERD: missing embedded schema");
+}
+
+/* ---------------- state ---------------- */
+const LS_KEY = "llb-erd-v1";
+let state = null;
+let cam = { x: 0, y: 0, k: 1 };
+let sel = null;
+let hover = null;
+let selEdge = null;
+let hoverEdge = -1;
+let linkFrom = null;
+let drag = null;
+let flash = null;
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+
+const COL = {
+  header: "#1f3a5f", headerSel: "#d98b0a", rowA: "#ffffff", rowB: "#f2f6fb",
+  border: "#8fa3bd", text: "#1b2430", muted: "#7b8794",
+  edge: "#5b7db1", edgeHi: "#e07b1f", grid: "#e3e9f2"
+};
+const ROW_H = 18, HEAD_H = 26, PAD = 8, MIN_W = 190;
+
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+function save(){
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){}
+  document.getElementById("saveTag").textContent = "auto-saved locally";
+}
+function load(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(raw){
+      const s = JSON.parse(raw);
+      if(s && s.tables && s.tables.length){
+        s.bend = s.bend || {};
+        s.bendX = s.bendX || {};
+        s.bendY = s.bendY || {};
+        return s;
+      }
+    }
+  }catch(e){}
+  return freshState();
+}
+function freshState(){
+  const s = { tables: clone(SCHEMA.tables), relations: clone(SCHEMA.relations),
+              pos: {}, bend: {}, bendX: {}, bendY: {} };
+  layoutDefault(s);
+  return s;
+}
+
+/* ---------------- layout & measure ---------------- */
+function groupOrder(s){
+  const seen = [], out = [];
+  for(const t of s.tables){ if(!seen.includes(t.group)){ seen.push(t.group); out.push(t.group); } }
+  const pref = ["Core: Org & People","Clients & Services","Tasks & Workflow",
+                "HR & Attendance","Payroll & Finance","Docs & System","Other"];
+  out.sort((a,b)=>{ const i=pref.indexOf(a), j=pref.indexOf(b);
+                    return (i<0?99:i)-(j<0?99:j); });
+  return out;
+}
+function measure(t){
+  ctx.font = "bold 13px Segoe UI, Arial";
+  let w = ctx.measureText(t.name).width;
+  ctx.font = "12px Consolas, Menlo, monospace";
+  for(const c of t.columns){
+    const label = c.name + "  " + c.type + (c.nn ? "  NN" : "") + (c.uq ? "  UQ" : "");
+    w = Math.max(w, ctx.measureText(label).width);
+  }
+  t.w = Math.max(MIN_W, Math.ceil(w) + 48);
+  t.h = HEAD_H + t.columns.length * ROW_H + 6;
+  return t;
+}
+function layoutDefault(s){
+  const groups = groupOrder(s);
+  let x = 40;
+  for(const g of groups){
+    let y = 60, colW = 0;
+    const ts = s.tables.filter(t=>t.group===g);
+    for(const t of ts){
+      measure(t);
+      s.pos[t.name] = { x: x, y: y };
+      y += t.h + 54;
+      colW = Math.max(colW, t.w);
+    }
+    x += colW + 175;
+  }
+}
+function relayout(){ state.pos = {}; layoutDefault(state); save(); }
+
+/* ---------------- helpers ---------------- */
+function table(name){ return state.tables.find(t=>t.name===name); }
+function allBounds(){
+  let x1=1e9,y1=1e9,x2=-1e9,y2=-1e9;
+  for(const t of state.tables){
+    const p = state.pos[t.name];
+    if(!p) continue;
+    x1=Math.min(x1,p.x); y1=Math.min(y1,p.y);
+    x2=Math.max(x2,p.x+t.w); y2=Math.max(y2,p.y+t.h);
+  }
+  if(x1>x2) return { x1:0, y1:0, x2:800, y2:600 };
+  return { x1, y1, x2, y2 };
+}
+function screenToWorld(sx, sy){
+  return { x: (sx - cam.x) / cam.k, y: (sy - cam.y) / cam.k };
+}
+function hitTest(wx, wy){
+  for(let i=state.tables.length-1;i>=0;i--){
+    const t = state.tables[i], p = state.pos[t.name];
+    if(!p) continue;
+    if(wx>=p.x && wx<=p.x+t.w && wy>=p.y && wy<=p.y+t.h){
+      if(wy <= p.y + HEAD_H) return { table: t.name, col: null, part: "head" };
+      const idx = Math.floor((wy - p.y - HEAD_H) / ROW_H);
+      if(idx>=0 && idx<t.columns.length) return { table: t.name, col: idx, part: "col" };
+      return { table: t.name, col: null, part: "pad" };
+    }
+  }
+  return null;
+}
+function colAnchor(tname, colIdx, toX){
+  const t = table(tname), p = state.pos[tname];
+  const y = p.y + HEAD_H + colIdx * ROW_H + ROW_H / 2;
+  const right = toX > p.x + t.w / 2;
+  return { x: right ? p.x + t.w : p.x, y: y, right: right };
+}
+function edgeList(){
+  return state.relations.filter(r => table(r.child) && table(r.parent));
+}
+function distToSeg(px, py, x1, y1, x2, y2){
+  const dx = x2 - x1, dy = y2 - y1;
+  const l2 = dx*dx + dy*dy;
+  let t = l2 ? ((px - x1)*dx + (py - y1)*dy) / l2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (x1 + t*dx), py - (y1 + t*dy));
+}
+function hitEdge(wx, wy, tol){
+  const edges = edgeList();
+  for(let i = 0; i < edges.length; i++){
+    const pts = orthoPoints(edges[i]).pts;
+    for(let k = 1; k < pts.length; k++){
+      if(distToSeg(wx, wy, pts[k-1].x, pts[k-1].y, pts[k].x, pts[k].y) <= tol)
+        return i;
+    }
+  }
+  return -1;
+}
+function colIndex(tname, cname){
+  const t = table(tname);
+  return t ? t.columns.findIndex(c=>c.name===cname) : -1;
+}
+function parentColIdx(r){
+  const t = table(r.parent);
+  if(!t) return 0;
+  const i = colIndex(r.parent, r.pcol);
+  return Math.max(0, i);
+}
+
+function isJunction(t){
+  const fks = t.columns.filter(c => c.fk).map(c => c.name);
+  if(fks.length < 2) return false;
+  if(t.columns.length - fks.length <= 2) return true;    // pure bridge (id + FKs)
+  return (t.keys || []).some(k => k.length >= 2 && k.every(n => fks.includes(n)));
+}
+
+/* draws crow's foot (many) at child end, tick (one) at parent end, plus 1/N labels.
+   dC/dP are the exit/entry directions: +1 = right-facing, -1 = left-facing. */
+function drawNotation(g, a, b, dC, dP, color, lw, font){
+  g.strokeStyle = color;
+  g.fillStyle = color;
+  g.lineWidth = lw || 1.2;
+  g.font = font || "bold 11px Segoe UI, Arial";
+  // child end — crow's foot prongs fanning into the child table
+  g.beginPath();
+  g.moveTo(a.x + dC*9, a.y - 5); g.lineTo(a.x, a.y);
+  g.moveTo(a.x + dC*9, a.y + 5); g.lineTo(a.x, a.y);
+  g.stroke();
+  g.fillText("N", a.x + (dC === 1 ? 7 : -19), a.y - 4);
+  // parent end — single tick
+  const bx = b.x - dP * 7;
+  g.beginPath(); g.moveTo(bx, b.y - 5); g.lineTo(bx, b.y + 5); g.stroke();
+  g.fillText("1", b.x + (dP === 1 ? -24 : 9), b.y - 4);
+}
+
+function relKey(r){
+  return r.child + "." + r.col + "\u2192" + r.parent + "." + r.pcol;
+}
+function centers(r){
+  const C = table(r.child), P = table(r.parent);
+  return { cC: state.pos[r.child].x + C.w / 2,
+           pC: state.pos[r.parent].x + P.w / 2 };
+}
+function desiredElbow(r){
+  const k = relKey(r);
+  if(state.bendX && typeof state.bendX[k] === "number") return state.bendX[k];
+  const f = state.bend && typeof state.bend[k] === "number" ? state.bend[k] : 0.5;
+  const { cC, pC } = centers(r);
+  return cC + f * (pC - cC);
+}
+/* stable sides: child always faces the parent, parent always faces the child.
+   Connection sides never flip while dragging. */
+function anchorPoints(r){
+  const ci = colIndex(r.child, r.col);
+  const pi = parentColIdx(r);
+  const C = table(r.child), P = table(r.parent);
+  const cp = state.pos[r.child], pp = state.pos[r.parent];
+  const right = pp.x > cp.x + C.w / 2;            // parent sits to the right of child
+  const a = { x: right ? cp.x + C.w : cp.x,
+              y: cp.y + HEAD_H + ci * ROW_H + ROW_H / 2 };
+  const b = { x: right ? pp.x : pp.x + P.w,
+              y: pp.y + HEAD_H + pi * ROW_H + ROW_H / 2 };
+  return { a, b, right };
+}
+let midOverride = null;   // rebuilt each frame by computeMids()
+let rowDetour = null;     // same-row edges that must detour around a card
+function cardHitRange(x, y1, y2, exclude){
+  const hits = [];
+  for(const t of state.tables){
+    if(exclude.includes(t.name)) continue;
+    const p = state.pos[t.name];
+    if(!p) continue;
+    if(x >= p.x - 10 && x <= p.x + t.w + 10 &&
+       y1 <= p.y + t.h && y2 >= p.y) hits.push(t);
+  }
+  return hits;
+}
+function cardBetween(a, b, child, parent){
+  const xLo = Math.min(a.x, b.x), xHi = Math.max(a.x, b.x), y = a.y;
+  const hits = [];
+  for(const t of state.tables){
+    if(t.name === child || t.name === parent) continue;
+    const p = state.pos[t.name];
+    if(!p) continue;
+    if(p.x + t.w > xLo && p.x < xHi && p.y <= y && p.y + t.h >= y) hits.push(t);
+  }
+  return hits;
+}
+function orthoPoints(r){
+  const k = relKey(r);
+  let midX = desiredElbow(r);
+  if(midOverride && midOverride[k] != null) midX = midOverride[k];
+  const { a, b, right } = anchorPoints(r);
+  let pts;
+  let cy = null;
+  const between = midX > Math.min(a.x, b.x) - 1 && midX < Math.max(a.x, b.x) + 1;
+  const by_ = state.bendY ? state.bendY[k] : null;
+  if(typeof by_ === "number"){
+    // user dragged vertically: lift a shelf between the two vertical runs
+    cy = Math.max(Math.min(a.y, b.y), Math.min(Math.max(a.y, b.y), by_));
+    pts = [{x:a.x,y:a.y},{x:midX,y:a.y}];
+    const push = (x, y) => {
+      const L = pts[pts.length - 1];
+      if(L.x !== x || L.y !== y) pts.push({ x: x, y: y });
+    };
+    push(midX, cy); push(b.x, cy); push(b.x, b.y); push(b.x, b.y);
+  }else if(Math.abs(a.y - b.y) < 4 && between){
+    const det = rowDetour ? rowDetour[k] : null;
+    pts = det
+      ? [{x:a.x,y:a.y},{x:a.x,y:det.cy},{x:b.x,y:det.cy},{x:b.x,y:b.y}]
+      : [{x:a.x, y:a.y}, {x:b.x, y:b.y}];
+  }else{
+    pts = buildElbow(a, b, midX, [r.child, r.parent]);
+  }
+  return { a, b, midX, pts, right, cy };
+}
+/* orthogonal route for the elbow that never digs into a card wall:
+   keeps the dragged elbow x, but shelves around any card it would cross */
+function buildElbow(a, b, midX, exclude){
+  const y1 = Math.min(a.y, b.y), y2 = Math.max(a.y, b.y);
+  const blocks = cardHitRange(midX, y1, y2, exclude);
+  if(!blocks.length){
+    return [{x:a.x, y:a.y}, {x:midX, y:a.y}, {x:midX, y:b.y}, {x:b.x, y:b.y}];
+  }
+  let minX = Infinity, maxX = -Infinity, top = Infinity, bot = -Infinity;
+  for(const t of blocks){
+    const p = state.pos[t.name];
+    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x + t.w);
+    top  = Math.min(top,  p.y); bot  = Math.max(bot,  p.y + t.h);
+  }
+  const sideX = Math.abs(midX - minX) < Math.abs(maxX - midX) ? minX - 28 : maxX + 28;
+  const cy1 = top - 14, cy2 = bot + 14;
+  const desc = a.y <= b.y;
+  const pts = [{x:a.x, y:a.y}, {x:midX, y:a.y}];
+  const pushP = (x, y) => {
+    const L = pts[pts.length - 1];
+    if(L.x !== x || L.y !== y) pts.push({ x: x, y: y });
+  };
+  if(desc){
+    pushP(midX, cy1); pushP(sideX, cy1); pushP(sideX, cy2); pushP(midX, cy2);
+    if(b.y > cy2) pushP(midX, b.y);
+  }else{
+    pushP(midX, cy2); pushP(sideX, cy2); pushP(sideX, cy1); pushP(midX, cy1);
+    if(b.y < cy1) pushP(midX, b.y);
+  }
+  pushP(b.x, b.y);
+  return pts;
+}
+function computeMids(){
+  const edges = edgeList();
+  midOverride = {};
+  rowDetour = {};
+  const placed = [];
+  for(const r of edges){
+    const key = relKey(r);
+    let m = desiredElbow(r);
+    const { a, b } = anchorPoints(r);
+    if(Math.abs(a.y - b.y) < 4){
+      const blocks = cardBetween(a, b, r.child, r.parent);
+      if(blocks.length){
+        let below = 0, above = 1e9;
+        for(const t of blocks){
+          below = Math.max(below, state.pos[t.name].y + t.h);
+          above = Math.min(above, state.pos[t.name].y);
+        }
+        const cy = (below + 24 - a.y < a.y - (above - 24)) ? below + 24 : above - 24;
+        rowDetour[key] = { cy: cy };
+      }
+      placed.push({ m: m, y1: a.y, y2: b.y });
+      continue;
+    }
+    let guard = 0;
+    while(guard++ < 8){
+      const hits2 = cardHitRange(m, Math.min(a.y, b.y), Math.max(a.y, b.y),
+                                 [r.child, r.parent]);
+      if(!hits2.length) break;
+      const p3 = state.pos[hits2[0].name];
+      const side1 = p3.x - 28, side2 = p3.x + hits2[0].w + 28;
+      m = Math.abs(m - side1) < Math.abs(m - side2) ? side1 : side2;
+    }
+    for(const p2 of placed){
+      const yOv = Math.min(a.y, b.y) <= p2.y2 && p2.y1 <= Math.max(a.y, b.y);
+      if(yOv && Math.abs(m - p2.m) < 26){
+        m = (m > p2.m) ? p2.m + 30 : p2.m - 30;
+      }
+    }
+    // final guard — never cross a card, even after spacing moved us
+    guard = 0;
+    while(guard++ < 8){
+      const hits3 = cardHitRange(m, Math.min(a.y, b.y), Math.max(a.y, b.y),
+                                 [r.child, r.parent]);
+      if(!hits3.length) break;
+      const p4 = state.pos[hits3[0].name];
+      const side1 = p4.x - 28, side2 = p4.x + hits3[0].w + 28;
+      m = Math.abs(m - side1) < Math.abs(m - side2) ? side1 : side2;
+    }
+    placed.push({ m: m, y1: Math.min(a.y, b.y), y2: Math.max(a.y, b.y) });
+    midOverride[key] = m;
+  }
+}
+/* ---------------- drawing ---------------- */
+function drawEdge(r, hi, width){
+  if(drag && drag.kind==="table" && drag.name===r.child) return;
+  if(colIndex(r.child, r.col) < 0) return;
+  const { a, b, right, midX, pts } = orthoPoints(r);
+  ctx.strokeStyle = hi ? COL.edgeHi : COL.edge;
+  ctx.lineWidth = width || (hi ? 2 : 1.1);
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for(let k = 1; k < pts.length; k++) ctx.lineTo(pts[k].x, pts[k].y);
+  ctx.stroke();
+  let plen = 0;
+  for(let k = 1; k < pts.length; k++){
+    plen += Math.hypot(pts[k].x - pts[k-1].x, pts[k].y - pts[k-1].y);
+  }
+  if(plen >= 24){   // no < > / 1 / N markers on degenerate micro-lines
+    drawNotation(ctx, a, b, right ? 1 : -1, right ? 1 : -1,
+                 hi ? COL.edgeHi : COL.edge, hi ? 2 : 1.2);
+    const j = isJunction(table(r.child));
+    const tag = (j ? "M:N" : "1:N") + (r.onDelete
+      ? "  ·  on delete " + r.onDelete.toLowerCase() : "");
+    ctx.fillStyle = COL.muted;
+    ctx.font = "9.5px Segoe UI, Arial";
+    const tw = ctx.measureText(tag).width;
+    ctx.fillText(tag, midX + (right ? 8 : -8) - tw / 2, (a.y + b.y) / 2 - 5);
+  }
+}
+function drawTable(t, isSel, isHover, isFlash){
+  const p = state.pos[t.name];
+  if(!p) return;
+  // shadow
+  ctx.fillStyle = "#00000014";
+  ctx.fillRect(p.x+2, p.y+3, t.w, t.h);
+  ctx.fillStyle = isSel ? "#d98b0a" : (isHover ? "#2d6bb0" : COL.header);
+  ctx.fillRect(p.x, p.y, t.w, HEAD_H);
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 13px Segoe UI, Arial";
+  const name = isFlash ? "→ " + t.name : t.name;
+  ctx.fillText(name, p.x + PAD, p.y + 17);
+  ctx.fillStyle = isSel ? "#d98b0a" : COL.border;
+  ctx.strokeRect(p.x, p.y, t.w, t.h);
+  const sx = (x, y, w, h) => { ctx.fillRect(x, y, w, h); };
+  for(let i=0;i<t.columns.length;i++){
+    const c = t.columns[i];
+    const y = p.y + HEAD_H + i * ROW_H;
+    ctx.fillStyle = (i%2===0) ? COL.rowA : COL.rowB;
+    ctx.fillRect(p.x, y, t.w, ROW_H);
+    ctx.font = "12px Consolas, Menlo, monospace";
+    ctx.fillStyle = COL.text;
+    let x = p.x + PAD;
+    if(c.pk){ ctx.fillStyle = "#b8860b"; sx(x,y+2,20,13); ctx.fillStyle="#fff";
+      ctx.font="bold 9px Segoe UI,Arial"; ctx.fillText("PK",x+3,y+12); x+=26;
+      ctx.font="12px Consolas, Menlo, monospace"; }
+    if(c.fk){ ctx.fillStyle = "#2563eb"; sx(x,y+2,20,13); ctx.fillStyle="#fff";
+      ctx.font="bold 9px Segoe UI,Arial"; ctx.fillText("FK",x+3,y+12); x+=26;
+      ctx.font="12px Consolas, Menlo, monospace"; }
+    if(c.nn){ ctx.fillStyle = "#64748b"; sx(x,y+2,20,13); ctx.fillStyle="#fff";
+      ctx.font="bold 9px Segoe UI,Arial"; ctx.fillText("NN",x+3,y+12); x+=26;
+      ctx.font="12px Consolas, Menlo, monospace"; }
+    if(c.uq){ ctx.fillStyle = "#0e9f6e"; sx(x,y+2,20,13); ctx.fillStyle="#fff";
+      ctx.font="bold 9px Segoe UI,Arial"; ctx.fillText("UQ",x+3,y+12); x+=26;
+      ctx.font="12px Consolas, Menlo, monospace"; }
+    ctx.fillStyle = COL.text;
+    ctx.fillText(c.name, x, y + 13);
+    ctx.fillStyle = COL.muted;
+    ctx.font = "11px Consolas, Menlo, monospace";
+    ctx.fillText(c.type, p.x + t.w - ctx.measureText(c.type).width - 8, y + 13);
+    ctx.font = "12px Consolas, Menlo, monospace";
+    ctx.strokeStyle = COL.border;
+    ctx.beginPath(); ctx.moveTo(p.x, y + ROW_H); ctx.lineTo(p.x + t.w, y + ROW_H); ctx.stroke();
+  }
+  if(isSel){ ctx.strokeStyle = COL.headerSel; ctx.lineWidth = 2; ctx.strokeRect(p.x, p.y, t.w, t.h); ctx.lineWidth = 1; }
+  if(isHover){ ctx.strokeStyle = "#2d6bb0"; ctx.lineWidth = 2; ctx.strokeRect(p.x, p.y, t.w, t.h); ctx.lineWidth = 1; }
+}
+function drawScene(){
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if(w < 10 || h < 10){ return; }   // not laid out yet — the ResizeObserver will retry
+  if(canvas.width !== w*dpr || canvas.height !== h*dpr){ canvas.width = w*dpr; canvas.height = h*dpr; }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = "#f7f9fc";
+  ctx.fillRect(0, 0, w, h);
+  ctx.save();
+  ctx.translate(cam.x, cam.y);
+  ctx.scale(cam.k, cam.k);
+  // grid
+  ctx.strokeStyle = COL.grid;
+  ctx.lineWidth = 1 / cam.k;
+  const step = 28, bx = -cam.x / cam.k, by = -cam.y / cam.k;
+  for(let gx = bx - (bx%step); gx < bx + w / cam.k; gx += step){
+    ctx.beginPath(); ctx.moveTo(gx, by); ctx.lineTo(gx, by + h / cam.k); ctx.stroke();
+  }
+  for(let gy = by - (by%step); gy < by + h / cam.k; gy += step){
+    ctx.beginPath(); ctx.moveTo(bx, gy); ctx.lineTo(bx + w / cam.k, gy); ctx.stroke();
+  }
+  const now = performance.now();
+  // group labels
+  const groups = groupOrder(state);
+  for(const g of groups){
+    const ts = state.tables.filter(t=>t.group===g && state.pos[t.name]);
+    if(!ts.length) continue;
+    const x = Math.min(...ts.map(t=>state.pos[t.name].x));
+    const y = Math.min(...ts.map(t=>state.pos[t.name].y));
+    ctx.fillStyle = "#8fa3bd";
+    ctx.font = "bold 12px Segoe UI, Arial";
+    ctx.fillText(g.toUpperCase(), x, y - 14);
+  }
+  // edges
+  computeMids();
+  const selName = sel ? sel.table : null;
+  const edges = edgeList();
+  const act = selEdge != null ? edges[selEdge] : null;
+  for(let i = 0; i < edges.length; i++){
+    const r = edges[i];
+    if(act === r) continue;
+    const hi = r.child===selName || r.parent===selName ||
+               (hover && (r.child===hover.table || r.parent===hover.table)) ||
+               i === hoverEdge;
+    drawEdge(r, hi);
+  }
+  if(act){
+    ctx.save();
+    ctx.shadowColor = COL.edgeHi;
+    ctx.shadowBlur = 12 / cam.k;
+    drawEdge(act, true, 3.4 / cam.k);
+    ctx.restore();
+    const el = orthoPoints(act);
+    let kx = el.midX, ky = (el.a.y + el.b.y) / 2, best = 0;
+    for(let v = 1; v < el.pts.length; v++){   // knob sits on the longest vertical run
+      if(el.pts[v].x === el.pts[v-1].x){
+        const dy = Math.abs(el.pts[v].y - el.pts[v-1].y);
+        if(dy > best){ best = dy; kx = el.pts[v].x; ky = (el.pts[v].y + el.pts[v-1].y) / 2; }
+      }
+    }
+    const r = 6 / cam.k;
+    ctx.beginPath();
+    ctx.arc(kx, ky, r, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+    ctx.strokeStyle = COL.edgeHi;
+    ctx.lineWidth = 2 / cam.k;
+    ctx.stroke();
+  }
+  // tables
+  const flashOn = flash && now < flash.until;
+  for(const t of state.tables){
+    const isSel = sel && sel.table===t.name;
+    const isHover = hover && hover.table===t.name;
+    const isFlash = flashOn && flash.table===t.name;
+    drawTable(t, isSel, isHover, isFlash);
+  }
+  ctx.restore();
+  if(linkFrom){
+    ctx.font = "12px Segoe UI, Arial";
+    ctx.fillStyle = "#d98b0a";
+    const label = linkFrom.table
+      ? "Link FK mode: click the PARENT table for " + linkFrom.table + "." + linkFrom.col
+      : "Link FK mode: click a CHILD column first";
+    ctx.fillText(label, 14, h - 26);
+  }
+  requestAnimationFrame(() => { if(!flash || now >= flash.until) return; drawScene(); });
+}
+
+/* ---------------- camera ---------------- */
+let rafId = null;
+function kick(){ if(rafId) return; rafId = requestAnimationFrame(()=>{ rafId=null; drawScene(); }); }
+function zoomAt(sx, sy, factor){
+  const w2 = canvas.clientWidth/2, h2 = canvas.clientHeight/2;
+  const before = screenToWorld(sx||w2, sy||h2);
+  cam.k = clamp(cam.k * factor, 0.1, 4);
+  const after = screenToWorld(sx||w2, sy||h2);
+  cam.x += (after.x - before.x) * cam.k;
+  cam.y += (after.y - before.y) * cam.k;
+  document.getElementById("zoomPct").textContent = Math.round(cam.k*100) + "%";
+  kick();
+}
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+function fitAll(){
+  const b = allBounds();
+  const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight;
+  const k = clamp(Math.min(w/(b.x2-b.x1+120), h/(b.y2-b.y1+200)), 0.1, 1.6);
+  cam.k = k;
+  cam.x = (w - (b.x2-b.x1)*k) / 2 - b.x1*k;
+  cam.y = (h - (b.y2-b.y1)*k) / 2 - b.y1*k + 40;
+  document.getElementById("zoomPct").textContent = Math.round(cam.k*100) + "%";
+  kick();
+}
+function focusTable(name){
+  const p = state.pos[name]; const t = table(name);
+  if(!p) return;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  cam.k = clamp(cam.k, 0.1, 4);
+  cam.x = w/2 - (p.x + t.w/2) * cam.k;
+  cam.y = h/2 - (p.y + t.h/2) * cam.k;
+  document.getElementById("zoomPct").textContent = Math.round(cam.k*100) + "%";
+  kick();
+}
+
+/* ---------------- editor panel ---------------- */
+const ed = {
+  panel: document.getElementById("editor"),
+  title: document.getElementById("edTitle"),
+  tName: document.getElementById("edTableName"),
+  cName: document.getElementById("edColName"),
+  cType: document.getElementById("edColType"),
+  cPk: document.getElementById("edPk"),
+  cNn: document.getElementById("edNn"),
+  cUq: document.getElementById("edUq"),
+  cFk: document.getElementById("edFk"),
+  tFields: document.getElementById("edTableFields"),
+  cFields: document.getElementById("edColFields"),
+  delBtn: document.getElementById("edDelete"),
+};
+function editorMode(kind, tableName, idx){
+  ed.mode = { kind, table: tableName, idx: idx };
+  ed.panel.style.display = "block";
+  if(kind==="table"){
+    ed.title.textContent = "Edit table: " + tableName;
+    ed.tFields.style.display = "block";
+    ed.cFields.style.display = "none";
+    ed.tName.value = tableName;
+    ed.delBtn.style.display = "inline-block";
+    ed.tName.focus(); ed.tName.select();
+  }else{
+    const c = table(tableName).columns[idx];
+    ed.title.textContent = "Edit column: " + tableName + "." + c.name;
+    ed.tFields.style.display = "none";
+    ed.cFields.style.display = "block";
+    ed.cName.value = c.name;
+    ed.cType.value = c.type;
+    ed.cPk.checked = !!c.pk; ed.cNn.checked = !!c.nn;
+    ed.cUq.checked = !!c.uq; ed.cFk.checked = !!c.fk;
+    ed.delBtn.style.display = "inline-block";
+    ed.cName.focus(); ed.cName.select();
+  }
+}
+function editorClose(){ ed.panel.style.display = "none"; ed.mode = null; }
+function editorSave(){
+  if(!ed.mode) return;
+  const t = table(ed.mode.table);
+  if(!t) { editorClose(); return; }
+  if(ed.mode.kind==="table"){
+    const nn = ed.tName.value.trim();
+    if(nn){
+      const old = t.name;
+      if(nn!==old){
+        // rename columns that referenced this table, keep relations
+        state.relations.forEach(r=>{ if(r.parent===old) r.parent=nn; });
+        const np = state.pos[old] || { x:0, y:0 };
+        delete state.pos[old];
+        state.pos[nn] = np;
+        t.name = nn;
+      }
+    }
+  }else{
+    const c = t.columns[ed.mode.idx];
+    if(!c){ editorClose(); return; }
+    c.name = ed.cName.value.trim() || c.name;
+    c.type = ed.cType.value.trim() || c.type;
+    c.pk = ed.cPk.checked; c.nn = ed.cNn.checked;
+    c.uq = ed.cUq.checked; c.fk = ed.cFk.checked;
+  }
+  measure(t);
+  editorClose();
+  save(); kick();
+}
+function editorDelete(){
+  if(!ed.mode) return;
+  const tname = ed.mode.table;
+  const t = table(tname);
+  if(!t){ editorClose(); return; }
+  if(ed.mode.kind==="table"){
+    const n = state.tables.length-1;
+    if(!confirm("Delete table '" + tname + "' and its " +
+                state.relations.filter(r=>r.child===tname||r.parent===tname).length +
+                " relationship(s)?")) return;
+    state.tables = state.tables.filter(x=>x.name!==tname);
+    state.relations = state.relations.filter(r=>r.child!==tname && r.parent!==tname);
+    delete state.pos[tname];
+    selEdge = null;
+    document.getElementById("stCounts").textContent = counts();
+  }else{
+    const idx = ed.mode.idx;
+    const cname = t.columns[idx].name;
+    if(!confirm("Delete column '" + tname + "." + cname + "'?")) return;
+    state.relations = state.relations.filter(r=>!(r.child===tname && r.col===cname));
+    t.columns.splice(idx, 1);
+  }
+  measure(t);
+  if(sel && sel.table===tname) sel = null;
+  editorClose(); save(); kick();
+}
+document.getElementById("edSave").addEventListener("click", editorSave);
+document.getElementById("edCancel").addEventListener("click", editorClose);
+document.getElementById("edDelete").addEventListener("click", editorDelete);
+
+/* ---------------- mouse & keyboard ---------------- */
+function updateStatus(){
+  document.getElementById("stCounts").textContent =
+    state.tables.length + " tables · " + edgeList().length + " relations · " +
+    state.tables.reduce((n,t)=>n+t.columns.length,0) + " columns";
+  if(selEdge != null){
+    const r = edgeList()[selEdge];
+    const t = r ? (r.child + "." + r.col + "  →  " + r.parent + "." + r.pcol +
+                   "  (1..N" + (r.onDelete ? ", on delete " + r.onDelete.toLowerCase() : "") + ")")
+                : "Edge";
+    document.getElementById("stSel").textContent = "Edge selected: " + t +
+      "  — drag the dot to re-route, press Delete to remove";
+  }else{
+    document.getElementById("stSel").textContent = sel
+      ? "Selected: " + sel.table + (sel.col!=null ? "." + table(sel.table).columns[sel.col].name : "")
+      : "Nothing selected";
+  }
+  document.getElementById("stMode").textContent = linkFrom
+    ? "LINK MODE → click the PARENT table for " + linkFrom.table + "." + linkFrom.col
+    : "";
+  document.getElementById("btnLink").classList.toggle("on", !!linkFrom);
+}
+function counts(){
+  return state.tables.length + " tables · " + edgeList().length + " relations · " +
+         state.tables.reduce((n,t)=>n+t.columns.length,0) + " columns";
+}
+canvas.addEventListener("mousedown", e=>{
+  const sx = e.offsetX, sy = e.offsetY;
+  const w = screenToWorld(sx, sy);
+  const hit = hitTest(w.x, w.y);
+  if(linkFrom){
+    if(hit && hit.part!=="col"){
+      const p = table(hit.table);
+      const pcol = p.columns.find(c=>c.pk) ? p.columns.find(c=>c.pk).name : p.columns[0].name;
+      const dup = state.relations.some(r=>r.child===linkFrom.table && r.col===linkFrom.col &&
+                                          r.parent===hit.table);
+      if(hit.table===linkFrom.table){ linkFrom=null; }
+      else{
+        if(!dup) state.relations.push({ child: linkFrom.table, col: linkFrom.col,
+          parent: hit.table, pcol: pcol, onDelete: "" });
+        const c = table(linkFrom.table).columns.find(c=>c.name===linkFrom.col);
+        if(c) c.fk = true;
+        linkFrom = null;
+        save();
+      }
+      updateStatus(); kick();
+      return;
+    }
+    if(!hit || hit.part!=="col"){ return; }
+    linkFrom = { table: hit.table, col: table(hit.table).columns[hit.col].name };
+    updateStatus(); kick();
+    return;
+  }
+  if(hit){
+    drag = { kind: "table", name: hit.table, sx: sx, sy: sy, wx: w.x, wy: w.y, moved: false };
+    sel = { table: hit.table, col: hit.col };
+    selEdge = null;
+    updateStatus();
+  }else{
+    const ei = hitEdge(w.x, w.y, 6 / cam.k);
+    if(ei >= 0){
+      selEdge = ei;
+      sel = null;
+      drag = { kind: "edge", i: ei, sx: sx, sy: sy, moved: false };
+      updateStatus();
+    }else{
+      sel = null;
+      drag = { kind: "pan", sx: sx, sy: sy, cx: cam.x, cy: cam.y };
+      canvas.classList.add("dragging");
+      updateStatus();
+    }
+  }
+  kick();
+});
+canvas.addEventListener("mousemove", e=>{
+  const sx = e.offsetX, sy = e.offsetY;
+  const w = screenToWorld(sx, sy);
+  if(drag){
+    if(!drag.moved && Math.hypot(sx-drag.sx, sy-drag.sy) > 4) drag.moved = true;
+    if(drag.moved){
+      if(drag.kind==="table"){
+        const gx = Math.round(w.x / 8) * 8, gy = Math.round(w.y / 8) * 8;
+        state.pos[drag.name].x = gx;
+        state.pos[drag.name].y = gy;
+      }else if(drag.kind==="edge"){
+        const edges = edgeList();
+        const r = edges[drag.i];
+        if(r){
+          state.bendX = state.bendX || {};
+          state.bendX[relKey(r)] = w.x;      // absolute elbow position follows the pointer
+          state.bendY = state.bendY || {};
+          state.bendY[relKey(r)] = w.y;      // shelf height follows vertical drag
+          midOverride = null;
+        }
+      }else{
+        cam.x = drag.cx + (sx - drag.sx);
+        cam.y = drag.cy + (sy - drag.sy);
+      }
+      document.getElementById("zoomPct").textContent = Math.round(cam.k*100) + "%";
+    }
+  }else{
+    hover = hitTest(w.x, w.y) || null;
+    hoverEdge = hover ? -1 : hitEdge(w.x, w.y, 6 / cam.k);
+    canvas.style.cursor = (hover || hoverEdge >= 0) ? "pointer" : "grab";
+  }
+  kick();
+});
+window.addEventListener("mouseup", ()=>{
+  if(drag && drag.moved && (drag.kind==="table" || drag.kind==="edge")){ save(); }
+  drag = null;
+  canvas.classList.remove("dragging");
+});
+canvas.addEventListener("dblclick", e=>{
+  const w = screenToWorld(e.offsetX, e.offsetY);
+  const hit = hitTest(w.x, w.y);
+  if(!hit){
+    // double-click empty space: clear edge + table highlights
+    selEdge = null;
+    sel = null;
+    updateStatus(); kick();
+    return;
+  }
+  sel = { table: hit.table, col: hit.col };
+  updateStatus();
+  editorMode(hit.part==="head" ? "table" : "col", hit.table,
+             hit.part==="head" ? null : hit.col);
+});
+canvas.addEventListener("wheel", e=>{
+  e.preventDefault();
+  zoomAt(e.offsetX, e.offsetY, Math.pow(1.0015, -e.deltaY));
+}, { passive: false });
+window.addEventListener("keydown", e=>{
+  if(e.key==="Delete" || e.key==="Backspace"){
+    if(document.activeElement && document.activeElement.tagName==="INPUT") return;
+    if(selEdge != null){
+      const r = edgeList()[selEdge];
+      if(r && confirm("Remove relationship " + r.child + "." + r.col + " → " +
+                      r.parent + "." + r.pcol + "?")){
+        state.relations = state.relations.filter(x => x !== r);
+        const c = table(r.child).columns.find(c => c.name === r.col);
+        if(c) c.fk = false;
+        selEdge = null;
+        save(); updateStatus(); kick();
+      }
+    }else if(sel){
+      editorMode(sel.col!=null ? "col" : "table", sel.table, sel.col);
+      editorDelete();
+    }
+  }
+  if(e.key==="Escape"){ linkFrom=null; selEdge=null; editorClose(); updateStatus(); kick(); }
+  if(e.key==="Enter" && document.activeElement && document.activeElement.id==="search"){
+    findTable(document.getElementById("search").value);
+  }
+});
+
+/* ---------------- toolbar ---------------- */
+function findTable(q){
+  q = q.trim().toLowerCase();
+  if(!q) return;
+  const t = state.tables.filter(t=>t.name.toLowerCase().includes(q));
+  if(!t.length){ document.getElementById("stSel").textContent = "No table containing '" + q + "'"; return; }
+  sel = { table: t[0].name, col: null };
+  flash = { table: t[0].name, until: performance.now() + 1800 };
+  focusTable(t[0].name);
+  updateStatus(); kick();
+}
+document.getElementById("btnZoomIn").addEventListener("click", ()=>zoomAt(null,null,1.25));
+document.getElementById("btnZoomOut").addEventListener("click", ()=>zoomAt(null,null,0.8));
+document.getElementById("btn100").addEventListener("click", ()=>{ cam.k=1; zoomAt(null,null,1); });
+document.getElementById("btnFit").addEventListener("click", fitAll);
+document.getElementById("btnAddTable").addEventListener("click", ()=>{
+  let n=1, nm = "new_table";
+  while(table(nm)){ n++; nm = "new_table_" + n; }
+  const t = { name: nm, group: "Other",
+    columns: [{ name: "id", type: "INT", pk: true, fk: false, nn: true, uq: false, ai: true }] };
+  state.tables.push(t);
+  const c = screenToWorld(canvas.clientWidth/2, canvas.clientHeight/2);
+  state.pos[nm] = { x: c.x - 80, y: c.y - 20 };
+  measure(t);
+  sel = { table: nm, col: 0 };
+  save(); updateStatus(); kick();
+  editorMode("table", nm, null);
+});
+document.getElementById("btnAddCol").addEventListener("click", ()=>{
+  if(!sel){ document.getElementById("stSel").textContent = "Select a table first"; return; }
+  const t = table(sel.table);
+  t.columns.forEach((c,i)=>{ if(i===sel.col){} });
+  t.columns.push({ name: "new_column", type: "VARCHAR(100)", pk: false, fk: false, nn: false, uq: false, ai: false });
+  measure(t); save(); kick();
+  editorMode("col", t.name, t.columns.length-1);
+});
+document.getElementById("btnLink").addEventListener("click", ()=>{
+  if(linkFrom){ linkFrom=null; } else { linkFrom = { table: null, col: null }; }
+  updateStatus(); kick();
+});
+document.getElementById("btnDelete").addEventListener("click", ()=>{
+  if(!sel){ document.getElementById("stSel").textContent = "Select a table or column first (click it)"; return; }
+  editorMode(sel.col!=null ? "col" : "table", sel.table, sel.col);
+  editorDelete();
+});
+document.getElementById("btnResetLayout").addEventListener("click", ()=>{
+  if(!confirm("Restore the default layout? Your edits to columns/relations stay.")) return;
+  relayout(); kick();
+});
+document.getElementById("btnResetAll").addEventListener("click", ()=>{
+  if(!confirm("Discard ALL edits (layout, renames, columns, relations) and reload the "
+              + "schema parsed from database/Capstone1.sql?")) return;
+  localStorage.removeItem(LS_KEY);
+  state = freshState();
+  sel = null; linkFrom = null;
+  selEdge = null; hoverEdge = -1;
+  save(); updateStatus(); kick();
+});
+
+/* ---------------- export: PNG / JPG / JPEG / WEBP ---------------- */
+function exportImage(mime, ext){
+  const b = allBounds();
+  const bw = b.x2 - b.x1, bh = b.y2 - b.y1;
+  const pad = 70, titleH = 84, footH = 56;
+  const W = bw + pad*2, H = bh + pad*2 + titleH + footH;
+  let scale = 2;
+  if(W*scale > 8000 || H*scale > 8000){
+    scale = Math.min(8000/Math.max(1,W), 8000/Math.max(1,H));
+  }
+  const cv = document.createElement("canvas");
+  cv.width = Math.ceil(W*scale);
+  cv.height = Math.ceil(H*scale);
+  const g = cv.getContext("2d");
+  g.fillStyle = "#ffffff";
+  g.fillRect(0, 0, cv.width, cv.height);
+  g.scale(scale, scale);
+  // title
+  g.fillStyle = "#1f3a5f";
+  g.font = "bold 30px Segoe UI, Arial";
+  g.fillText("LLB Accountants — Logical-Relational ERD", pad, pad - 22);
+  g.fillStyle = "#455";
+  g.font = "15px Segoe UI, Arial";
+  g.fillText(state.tables.length + " tables · " + edgeList().length + " relations · " +
+             state.tables.reduce((n,t)=>n+t.columns.length,0) +
+             " columns — from database/Capstone1.sql", pad, pad - 4);
+  g.translate(pad, pad + titleH);
+  g.save();
+  g.scale(1, 1);
+  // draw grid lightly
+  g.strokeStyle = "#e9eef6";
+  g.lineWidth = 1;
+  for(let gx = 0; gx < bw; gx += 28){ g.beginPath(); g.moveTo(gx, 0); g.lineTo(gx, bh); g.stroke(); }
+  for(let gy = 0; gy < bh; gy += 28){ g.beginPath(); g.moveTo(0, gy); g.lineTo(bw, gy); g.stroke(); }
+  g.restore();
+  // shift world coords so tables start inside translated frame: our tables are
+  // positioned at world coords; temporarily draw with an internal origin offset
+  g.save();
+  g.translate(-b.x1, -b.y1);
+  g.strokeStyle = "#5b7db1"; g.lineWidth = 1.5;
+  computeMids();
+  for(const r of edgeList()){
+    if(colIndex(r.child, r.col) < 0) continue;
+    const { a, b, right, midX, pts } = orthoPoints(r);
+    g.beginPath();
+    g.moveTo(pts[0].x, pts[0].y);
+    for(let k = 1; k < pts.length; k++) g.lineTo(pts[k].x, pts[k].y);
+    g.stroke();
+    let plen = 0;
+    for(let k = 1; k < pts.length; k++){
+      plen += Math.hypot(pts[k].x - pts[k-1].x, pts[k].y - pts[k-1].y);
+    }
+    if(plen >= 24){
+      drawNotation(g, a, b, right ? 1 : -1, right ? 1 : -1,
+                   "#5b7db1", 1.4, "bold 12px Segoe UI, Arial");
+      const j = isJunction(table(r.child));
+      const tag = (j ? "M:N" : "1:N") + (r.onDelete
+        ? "  ·  on delete " + r.onDelete.toLowerCase() : "");
+      g.font = "10px Segoe UI, Arial";
+      g.fillStyle = "#7b8794";
+      const tw = g.measureText(tag).width;
+      g.fillText(tag, midX + (right ? 8 : -8) - tw / 2, (a.y + b.y) / 2 - 5);
+    }
+  }
+  // reuse theme but minimal noise for print; simple clean boxes
+  for(const t of state.tables){
+    const p = state.pos[t.name]; if(!p) continue;
+    g.fillStyle = "#1f3a5f";
+    g.fillRect(p.x, p.y, t.w, 26);
+    g.fillStyle = "#fff";
+    g.font = "bold 13px Segoe UI, Arial";
+    g.fillText(t.name, p.x + 8, p.y + 18);
+    for(let i=0;i<t.columns.length;i++){
+      const c = t.columns[i];
+      const y = p.y + 26 + i*18;
+      g.fillStyle = (i%2===0) ? "#ffffff" : "#f2f6fb";
+      g.fillRect(p.x, y, t.w, 18);
+      g.strokeStyle = "#c9d4e2"; g.lineWidth = 1;
+      g.strokeRect(p.x, y, t.w, 18);
+      let x = p.x + 6;
+      if(c.pk){ g.fillStyle="#b8860b"; g.fillRect(x,y+2,20,13); g.fillStyle="#fff";
+        g.font="bold 9px Segoe UI,Arial"; g.fillText("PK",x+3,y+12); x+=25; }
+      if(c.fk){ g.fillStyle="#2563eb"; g.fillRect(x,y+2,20,13); g.fillStyle="#fff";
+        g.font="bold 9px Segoe UI,Arial"; g.fillText("FK",x+3,y+12); x+=25; }
+      if(c.nn){ g.fillStyle="#64748b"; g.fillRect(x,y+2,20,13); g.fillStyle="#fff";
+        g.font="bold 9px Segoe UI,Arial"; g.fillText("NN",x+3,y+12); x+=25; }
+      if(c.uq){ g.fillStyle="#0e9f6e"; g.fillRect(x,y+2,20,13); g.fillStyle="#fff";
+        g.font="bold 9px Segoe UI,Arial"; g.fillText("UQ",x+3,y+12); x+=25; }
+      g.fillStyle = "#1b2430";
+      g.font = "12px Consolas, Menlo, monospace";
+      g.fillText(c.name, x, y+13);
+      g.fillStyle = "#7b8794";
+      g.font = "11px Consolas, Menlo, monospace";
+      g.fillText(c.type, p.x + t.w - g.measureText(c.type).width - 8, y+13);
+    }
+    g.strokeStyle = "#8fa3bd"; g.lineWidth = 1;
+    g.strokeRect(p.x, p.y, t.w, t.h);
+  }
+  g.restore();
+  // footer legend
+  g.fillStyle = "#8591a0";
+  g.font = "13px Segoe UI, Arial";
+  g.fillText("PK = primary key    FK = foreign key    NN = not null    UQ = unique" +
+             "    1 (parent) — N (child)", pad, pad + titleH + bh + 34);
+  const a = document.createElement("a");
+  a.download = "Database_ERD." + ext;
+  a.href = cv.toDataURL(mime, 0.92);
+  a.click();
+}
+document.getElementById("btnPng").addEventListener("click", ()=>exportImage("image/png", "png"));
+document.getElementById("btnJpg").addEventListener("click", ()=>exportImage("image/jpeg", "jpg"));
+document.getElementById("btnJpeg").addEventListener("click", ()=>exportImage("image/jpeg", "jpeg"));
+document.getElementById("btnWebp").addEventListener("click", ()=>exportImage("image/webp", "webp"));
+
+/* ---------------- init ---------------- */
+state = load();
+if(!state.tables.length){
+  window.__bootErr("<b>No tables loaded.</b> The SQL file produced an empty schema " +
+    "model. Regenerate with <code>python scripts/generate_erd_html.py</code> after " +
+    "checking <code>database/Capstone1.sql</code>.");
+}else{
+updateStatus();
+fitAll();
+}
+// If the canvas had zero size at first paint (e.g. opened in a small panel),
+// redraw once the container has real dimensions. We fit ONLY on the first
+// usable size — later size changes (window resize, status-bar wrapping) must
+// never steal the user's zoom/pan.
+let fitDone = false;
+if(typeof ResizeObserver !== "undefined"){
+  const ro = new ResizeObserver(() => {
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    if(w < 10 || h < 10) return;
+    if(!fitDone){ fitDone = true; fitAll(); }
+    else { kick(); }
+  });
+  ro.observe(canvas);
+}
+window.addEventListener("load", () => { if(!fitDone){ fitDone = true; fitAll(); } kick(); });
+
+/* ---------------- automation hook (used by the offline ERD test harness) ---------------- */
+window.__erd = {
+  get state(){ return state; },
+  get cam(){ return cam; },
+  get selEdge(){ return selEdge; },
+  get drag(){ return drag; },
+  editorMode, editorClose, editorSave, editorDelete, findTable,
+  exportImage, hitTest, hitEdge, screenToWorld, save, measure, orthoPoints,
+  isJunction, anchorPoints, desiredElbow, buildElbow, computeMids,
+};
+
+/* ---------------- self-test (?test=1) — harmless in normal use ---------------- */
+if(new URLSearchParams(location.search).has("test")){
+  try{
+    const out = { tables: state.tables.length, rels: edgeList().length,
+      cols: state.tables.reduce((n,t)=>n+t.columns.length,0),
+      pos: Object.keys(state.pos).length, camK: cam.k };
+    drawScene();
+    const d = ctx.getImageData(Math.floor(canvas.width/2), Math.floor(canvas.height/2), 1, 1).data;
+    out.pixel = [d[0], d[1], d[2]];
+    out.status = document.getElementById("stCounts").textContent;
+    out.zoomLabel = document.getElementById("zoomPct").textContent;
+    out.exports = {};
+    ["image/png", "image/jpeg", "image/webp"].forEach(m=>{
+      const c2 = document.createElement("canvas"); c2.width = 8; c2.height = 8;
+      const g2 = c2.getContext("2d"); g2.fillStyle = "#fff"; g2.fillRect(0, 0, 8, 8);
+      out.exports[m] = c2.toDataURL(m, 0.92).slice(0, 30);
+    });
+    const pre = document.createElement("pre");
+    pre.id = "testout";
+    pre.textContent = "ERDTEST " + JSON.stringify(out);
+    document.body.appendChild(pre);
+    console.log("ERDTEST_RESULT", JSON.stringify(out));
+  }catch(e){
+    const pre = document.createElement("pre");
+    pre.id = "testout";
+    pre.textContent = "ERDTEST " + JSON.stringify({ error: String(e) });
+    document.body.appendChild(pre);
+    console.log("ERDTEST_ERROR", String(e));
+  }
+}else{
+  console.log("ERDTEST_SKIPPED", location.search);
+}
+</script>
+</body>
+</html>

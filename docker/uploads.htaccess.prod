@@ -1,0 +1,8 @@
+# Uploaded files are private application data. They must only be returned by
+# authenticated API handlers after authorization checks.
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Deny from all
+</IfModule>

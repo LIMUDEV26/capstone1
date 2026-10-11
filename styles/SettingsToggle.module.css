@@ -1,0 +1,162 @@
+.track {
+    position: relative;
+    display: inline-block;
+    box-sizing: border-box;
+    width: 66px;
+    height: 32px;
+    flex-shrink: 0;
+    border-radius: 999px;
+    border: 1px solid #cbd5e1;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    background: #e5e7eb;
+    box-shadow: none;
+    transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.track:hover:not(:disabled) {
+    border-color: #94a3b8;
+}
+
+.track:active:not(:disabled) {
+    transform: scale(0.985);
+}
+
+.track:focus-visible {
+    outline: 2px solid #1d4ed8;
+    outline-offset: 2px;
+    box-shadow: none;
+}
+
+.trackOn:focus-visible {
+    box-shadow: none;
+}
+
+.track:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.trackLabel {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    color: #64748b;
+    text-shadow: none;
+    user-select: none;
+    pointer-events: none;
+    line-height: 1;
+}
+
+.labelOn {
+    left: 11px;
+}
+
+.labelOff {
+    right: 10px;
+}
+
+.knob {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 1px solid #94a3b8;
+    box-shadow: none;
+    transition: transform 0.2s ease;
+    will-change: transform;
+    z-index: 2;
+}
+
+.knobGloss {
+    display: none;
+}
+
+.trackOn {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+    box-shadow: none;
+}
+
+.trackOn .knob {
+    transform: translateX(34px);
+    background: #ffffff;
+    border-color: #ffffff;
+    box-shadow: none;
+}
+
+/* Small variant */
+.small {
+    width: 54px;
+    height: 24px;
+}
+
+.small .knob {
+    width: 18px;
+    height: 18px;
+}
+
+.small.trackOn .knob {
+    transform: translateX(30px);
+}
+
+.small.trackOn {
+    box-shadow: none;
+}
+
+.small .trackLabel {
+    font-size: 8.5px;
+    letter-spacing: 0.07em;
+}
+
+.small .labelOn {
+    left: 7px;
+}
+
+.small .labelOff {
+    right: 6px;
+}
+
+/* Status chip */
+.status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    padding: 3px 10px 3px 8px;
+    border-radius: 999px;
+    line-height: 1.4;
+    user-select: none;
+}
+
+.statusDot {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: currentColor;
+}
+
+.statusOn {
+    color: #166534;
+    background: rgba(22, 161, 52, 0.1);
+    border: 1px solid rgba(22, 101, 52, 0.3);
+    box-shadow: none;
+}
+
+.statusOff {
+    color: #b91c1c;
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(220, 38, 38, 0.3);
+    box-shadow: none;
+}

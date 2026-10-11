@@ -1,0 +1,85 @@
+.gate {
+    container-type: inline-size;
+    box-sizing: border-box;
+    min-width: 0;
+    width: 100%;
+}
+
+.challengeRow {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(88px, 104px);
+    gap: 8px;
+    align-items: stretch;
+    min-width: 0;
+    width: 100%;
+}
+
+.verifyButton {
+    width: 104px;
+    min-width: 104px;
+    min-height: 44px;
+    height: 44px;
+    align-self: center;
+    border: 1px solid #1e40af;
+    border-radius: 10px;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1;
+    padding: 0 14px;
+    white-space: nowrap;
+}
+
+.verifyButton:focus-visible {
+    outline: 3px solid rgba(59, 130, 246, 0.28);
+    outline-offset: 2px;
+}
+
+.verifyButton:disabled {
+    border-color: #60a5fa;
+    opacity: 0.72;
+}
+
+@container (max-width: 410px) {
+    .challengeRow {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .verifyButton {
+        grid-column: 1 / -1;
+        width: 100%;
+        min-width: 0;
+    }
+}
+
+@container (max-width: 280px) {
+    .challengeRow {
+        grid-template-columns: 1fr;
+    }
+
+    .verifyButton {
+        grid-column: auto;
+    }
+}
+
+@media (max-width: 540px) {
+    .challengeRow {
+        grid-template-columns: minmax(130px, 1fr) minmax(120px, 1fr);
+    }
+
+    .verifyButton {
+        grid-column: 1 / -1;
+        width: 100%;
+        min-width: 0;
+    }
+}
+
+@media (max-width: 360px) {
+    .challengeRow {
+        grid-template-columns: 1fr;
+    }
+
+    .verifyButton {
+        grid-column: auto;
+    }
+}

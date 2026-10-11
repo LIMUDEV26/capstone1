@@ -1,0 +1,348 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Testing Plan - Login-to-End</title>
+<style>
+  @page { size: A4; margin: 14mm 12mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5px; color: #1f2937; line-height: 1.35; margin: 0; }
+  h1 { font-size: 16px; text-align: center; color: #1e3a8a; margin: 0 0 2px; }
+  h2 { font-size: 13px; color: #1e3a8a; border-bottom: 2px solid #c99a4d; padding-bottom: 2px; margin: 16px 0 6px; }
+  h3 { font-size: 11.5px; color: #0f172a; margin: 10px 0 4px; }
+  p, li { font-size: 9.8px; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 10px; font-size: 8.8px; }
+  th, td { border: 1px solid #cbd5e1; padding: 3px 5px; text-align: left; vertical-align: top; }
+  th { background: #1e3a8a; color: #fff; font-weight: 700; }
+  tr:nth-child(even) td { background: #f1f5f9; }
+  .sub { text-align: center; font-size: 10px; color: #475569; margin-bottom: 2px; }
+  .meta { text-align: center; font-size: 9px; color: #64748b; margin-bottom: 8px; }
+  .note { background: #fffbeb; border-left: 3px solid #c99a4d; padding: 6px 8px; font-size: 9px; margin: 6px 0; }
+  .pagebreak { page-break-before: always; }
+  code { background: #f1f5f9; padding: 0 2px; border-radius: 3px; font-size: 8.5px; }
+</style>
+</head>
+<body>
+<h1>REAL TIME WORKFLOW, ACTIVITY LOG, IN PAYROLL MANAGEMENT SYSTEM WITH INTEGRATED ANALYTICS FOR ACCOUNTING FIRMS</h1>
+<div class="sub">Cagayan de Oro College | College of Information Technology Education</div>
+<h2 style="text-align:center;border:none;color:#c99a4d;">TESTING PLAN: LOGIN-TO-END SYSTEM FLOW</h2>
+<div class="meta">Researchers: Jana Vinzy E. Dacula, Jellianne Mariz L. Mulit, Mikie Angelyn A. Romero, Roberth B. Namoc, Shiela Mae B. Pacala</div>
+<div class="note">This testing plan is regenerated directly from the implemented system. Every test targets a real function, API endpoint, page route, or database table discovered in the codebase. The base execution path is the actual user journey: <b>Login to Session/RBAC to Master Data (Branches/Employees/Users) to Clients/Projects to Tasks/Workflow to Documents/Services to Payroll and HR to Analytics/Reports to Activity Log/Notifications/Security to Settings to Logout</b>. Source of truth: <code>api/auth.php</code>, <code>api/utils.php</code>, <code>components/AuthProvider.tsx</code>, <code>pages/index.tsx</code>, <code>database/Capstone1.sql</code>, and the <code>api/*</code> endpoints listed per series.</div>
+
+<div class="pagebreak"></div>
+<h2>LEVEL 1: Master Unit Testing Registry (Login-to-End Sequence)</h2>
+
+<h3>Series 100: Authentication and Login (api/auth.php to pages/index.tsx)</h3>
+<table>
+<thead><tr><th>Unit ID</th><th>Target Function</th><th>Testing Scenario Profile (step by step)</th><th>Expected Result</th></tr></thead>
+<tbody>
+<tr><td>1.1</td><td><code>normalizeLoginIdentifier()</code> / <code>normalizeEmailIdentifier()</code></td><td>Input <code>test@com</code>, <code>@@domain.com</code>, <code>  TEST@Gmail.com  </code></td><td>Invalid/malformed rejected; valid normalized to lowercase + trimmed</td></tr>
+<tr><td>1.2</td><td><code>validateGmailComEmail()</code> (utils.php)</td><td>Input non-<code>@gmail.com</code>/non-<code>@phinmaed.com</code> domain</td><td>Return false (Rejected)</td></tr>
+<tr><td>1.3</td><td><code>hashPassword()</code> / <code>verifyPassword()</code> (utils.php)</td><td>Hash a password; verify correct vs modified plaintext</td><td>true if match; false if modified</td></tr>
+<tr><td>1.4</td><td><code>authenticateLoginCredentials()</code></td><td>Valid username/email + correct password</td><td>Returns user record + sets active session</td></tr>
+<tr><td>1.5</td><td><code>authenticateLoginCredentials()</code></td><td>Valid user + wrong password (1st-3rd fail)</td><td>401 + <code>attempts_remaining</code> decrements 3 to 2 to 1</td></tr>
+<tr><td>1.6</td><td><code>checkAndIncrementLoginFailureCounter()</code></td><td>Consecutive failures reach limit (4th+)</td><td>Account <code>status=locked</code>, 403 lockout response</td></tr>
+<tr><td>1.7</td><td><code>getIntruderIPLockoutConfig()</code> + <code>recordIntruderIPAttempt()</code> + <code>isIntruderIPBlocked()</code></td><td>10 unknown-email attempts from same IP</td><td>IP blocked until <code>blocked_until</code>, 429 Intruder Blocked</td></tr>
+<tr><td>1.8</td><td><code>handleLoginPrecheck()</code></td><td>Correct creds, <code>isLoginMathCaptchaEnabled=true</code></td><td>Returns <code>captcha_required:true, mode:custom, expires_in:90</code> + <code>$_SESSION['pending_login']</code></td></tr>
+<tr><td>1.9</td><td><code>isMathCaptchaVerified()</code></td><td><code>handleLoginComplete</code> before auto_check delay elapses</td><td>Returns still running error + <code>retry_after_ms</code></td></tr>
+<tr><td>1.10</td><td><code>handleLoginComplete()</code></td><td>Valid precheck + verified captcha + delay passed</td><td>Finalizes login, clears <code>pending_login</code></td></tr>
+<tr><td>1.11</td><td><code>setActiveSessionUserFromRecord()</code></td><td>Successful login_complete</td><td>Session regenerated; <code>user_id, role, branch_id, must_reset_password</code> set</td></tr>
+<tr><td>1.12</td><td><code>preparePasswordExpirationForUser()</code> (password_policy_utils.php)</td><td>Login where <code>password_expires_at &lt; NOW()</code></td><td><code>must_reset_password=1, reason=expired</code>, redirect <code>/change-password</code></td></tr>
+<tr><td>1.13</td><td><code>sanitizeInput()</code> (config.php)</td><td>Input <code>&lt;script&gt;malicious()&lt;/script&gt;</code></td><td>Return stripped/encoded clean string (XSS protection)</td></tr>
+<tr><td>1.14</td><td><code>hasRoleFeatureAccess()</code> / <code>requireRole()</code> / <code>requireMinRole()</code></td><td>Staff attempts <code>register</code> or admin-only action</td><td>Return false / 403 Forbidden</td></tr>
+</tbody>
+</table>
+
+<h3>Series 200: Session, RBAC and Dashboards</h3>
+<table>
+<thead><tr><th>Unit ID</th><th>Target Function</th><th>Testing Scenario Profile</th><th>Expected Result</th></tr></thead>
+<tbody>
+<tr><td>2.1</td><td><code>handleCheckSession()</code></td><td>Valid session cookie presented</td><td>200 + user + <code>getRoleDashboardPath()</code> (/admin/dashboard, /manager/dashboard, /dashboard)</td></tr>
+<tr><td>2.2</td><td><code>enforceManagedRoleSessionTimeout()</code> + <code>getManagedRoleSessionTimeoutConfig()</code></td><td>Manager/Staff idle beyond timeout</td><td>Session invalidated, 401, redirect <code>/</code></td></tr>
+<tr><td>2.3</td><td><code>getRoleFeatureAccessMap()</code> + <code>getRoleFeatureAccessCatalog()</code></td><td>Admin vs Manager vs Staff session</td><td>Correct feature map (keys: clients, services, payroll, employees, settings, activity_log, etc.)</td></tr>
+<tr><td>2.4</td><td><code>requireFeatureAccess()</code></td><td>Staff requests <code>payroll</code> / <code>clients</code> feature</td><td>false (staff lacks) to 403</td></tr>
+<tr><td>2.5</td><td><code>analytics.php</code> / <code>payroll_analytics.php</code> aggregates</td><td>Fetch role dashboard KPIs</td><td>Counts/trends scoped to role's branch</td></tr>
+<tr><td>2.6</td><td><code>buildProjectDateEvents()</code></td><td>Projects with start/end dates</td><td>Calendar map with green start / red end dots</td></tr>
+</tbody>
+</table>
+
+<h3>Series 300: Master Data Setup (Branches to Employees to Users)</h3>
+<table>
+<thead><tr><th>Unit ID</th><th>Target Function</th><th>Testing Scenario Profile</th><th>Expected Result</th></tr></thead>
+<tbody>
+<tr><td>3.1</td><td><code>branches.php</code> create</td><td>Admin creates branch via <code>api/branches.php</code></td><td>201, <code>branch_id</code>, row in <code>branches</code> + <code>activity_log</code> entry</td></tr>
+<tr><td>3.2</td><td><code>assertBranchExistsForRegister()</code></td><td>Register user with non-existent <code>branch_id</code></td><td>404 Branch not found</td></tr>
+<tr><td>3.3</td><td><code>employees.php</code> create</td><td>Valid employee with <code>branch_id</code></td><td><code>employee_id</code> linked to branch</td></tr>
+<tr><td>3.4</td><td><code>assertManagerBranchAvailabilityForRegister()</code></td><td>Second manager for same branch</td><td>409 Only one manager per branch</td></tr>
+<tr><td>3.5</td><td><code>handleRegister()</code></td><td>Admin creates user (@gmail.com, strong password)</td><td>201, <code>must_reset_password=1</code>, auto username, hash stored</td></tr>
+<tr><td>3.6</td><td><code>ensureUniqueUserFullName()</code></td><td>Duplicate first+last name</td><td>409 User with same name exists</td></tr>
+<tr><td>3.7</td><td><code>handleRegister()</code> dup email</td><td>Email exists (compared lowercased)</td><td>409 Email already in use</td></tr>
+<tr><td>3.8</td><td><code>generateUniqueUsernameFromEmail()</code> + <code>buildUsernameBaseFromEmail()</code></td><td><code>john.doe@gmail.com</code> taken</td><td>Appends <code>_1</code>, <code>_2</code> until unique</td></tr>
+<tr><td>3.9</td><td><code>users.php</code> update</td><td>Change branch/role/status</td><td>Persisted + activity logged</td></tr>
+<tr><td>3.10</td><td><code>validateEmail()</code> / <code>validateDate()</code></td><td>Bad email format / bad date</td><td>Return false + field error</td></tr>
+</tbody>
+</table>
+
+<div class="pagebreak"></div>
+<h3>Series 400: Client and Project Setup</h3>
+<table>
+<thead><tr><th>Unit ID</th><th>Target Function</th><th>Testing Scenario Profile</th><th>Expected Result</th></tr></thead>
+<tbody>
+<tr><td>4.1</td><td><code>clients.php</code> create</td><td>Create client record (<code>api/clients.php</code>)</td><td><code>client_id</code>, status active, row in <code>client</code></td></tr>
+<tr><td>4.2</td><td><code>projects.php</code> create</td><td>Link client to project (<code>api/projects.php</code>)</td><td>Project with correct <code>client_id</code> FK</td></tr>
+<tr><td>4.3</td><td><code>task-workflow.php</code> link</td><td>Task associated to <code>project_id</code></td><td>Task scoped to project</td></tr>
+<tr><td>4.4</td><td><code>projects.php</code> update status</td><td>Archive project</td><td>No longer in active calendar</td></tr>
+</tbody>
+</table>
+
+<h3>Series 500: Workflow and Task Management</h3>
+<table>
+<thead><tr><th>Unit ID</th><th>Target Function</th><th>Testing Scenario Profile</th><th>Expected Result</th></tr></thead>
+<tbody>
+<tr><td>5.1</td><td><code>tasks.php</code> <code>handlePost()</code></td><td>Manager creates task w/ title+assignee+due+priority</td><td>New task <code>status=pending</code> + <code>activity_log</code></td></tr>
+<tr><td>5.2</td><td><code>tasks.php</code> <code>handlePut()</code> (assign)</td><td>Reassign task</td><td>Updated assignee + collaborators</td></tr>
+<tr><td>5.3</td><td><code>tasks.php</code> <code>handlePut()</code> (status)</td><td>Staff marks <code>completed</code></td><td>Status + timestamp set, log written</td></tr>
+<tr><td>5.4</td><td><code>checklist_items</code> insert</td><td>Add service checklist item</td><td>Item stored, <code>proof_file</code> nullable</td></tr>
+<tr><td>5.5</td><td><code>task_collaborators</code> insert</td><td>Add collaborator (current_time/range shift)</td><td>Collaborator row created</td></tr>
+<tr><td>5.6</td><td><code>getPaginationInfo()</code> + filter query</td><td>Query assigned_to + date range</td><td>Matching rows, newest first, paginated</td></tr>
+<tr><td>5.7</td><td>due validation</td><td><code>due_date &lt; start_date</code></td><td>Flagged for review</td></tr>
+</tbody>
+</table>
+
+<h3>Series 600: Documents, Services and Contracts</h3>
+<table>
+<thead><tr><th>Unit ID</th><th>Target Function</th><th>Testing Scenario Profile</th><th>Expected Result</th></tr></thead>
+<tbody>
+<tr><td>6.1</td><td><code>documents.php</code> / <code>serve-file.php</code></td><td>Upload PDF/XLS to task; fetch via serve-file</td><td>Path stored, access auth-gated by branch/role</td></tr>
+<tr><td>6.2</td><td><code>services.php</code> / <code>service_checklists</code></td><td>Create service template linked to task</td><td>Checklist generated per engagement</td></tr>
+<tr><td>6.3</td><td><code>contracts.php</code> / <code>client_services</code></td><td>Create contract for client service</td><td>Contract row linked, appears in contracts UI</td></tr>
+</tbody>
+</table>
+
+<h3>Series 700: Payroll and HR Engine</h3>
+<table>
+<thead><tr><th>Unit ID</th><th>Target Function</th><th>Testing Scenario Profile</th><th>Expected Result</th></tr></thead>
+<tbody>
+<tr><td>7.1</td><td><code>attendance_import.php</code> / <code>preview_xls_import.php</code></td><td>Upload biometric XLS (time-in/out)</td><td>Parsed, matched to <code>employee_id</code> in <code>attendance_records</code></td></tr>
+<tr><td>7.2</td><td><code>validatePayrollPeriodDates()</code> / attendance validation</td><td>Timeout &lt; timein or missing pair</td><td>Flagged for manual review</td></tr>
+<tr><td>7.3</td><td><code>calculatePayrollGrossFromRow()</code> + <code>formatCurrency()</code></td><td>rate multiplied by payable hours</td><td>Gross to 2 decimals</td></tr>
+<tr><td>7.4</td><td><code>computeGovernmentDeductionsFromTypes()</code> + <code>computeDeductionAmount()</code> + <code>computeThresholdRateDeduction()</code></td><td>SSS/PhilHealth/Pag-IBIG thresholds</td><td>Correct net, threshold above/below applied</td></tr>
+<tr><td>7.5</td><td><code>calculatePayrollNetFromRow()</code> / <code>calculateNetPay()</code></td><td>Gross minus deductions plus/minus cash advance</td><td>Net correct, 2 decimals</td></tr>
+<tr><td>7.6</td><td><code>payroll.php</code> <code>handlePost()</code> (run)</td><td>Run payroll for period/branch</td><td>Payroll rows created, totals match manual</td></tr>
+<tr><td>7.7</td><td><code>payroll.php</code> <code>handleGet()</code> (payslip)</td><td>View <code>/my-payslips</code> / archive</td><td>Correct payslip, PDF export clean</td></tr>
+<tr><td>7.8</td><td><code>overtime-requests.php</code> / <code>leave-requests.php</code> / <code>cash-advance-requests.php</code></td><td>Submit requests</td><td><code>pending</code> to appears in <code>approval-inbox.php</code></td></tr>
+<tr><td>7.9</td><td><code>approval-inbox.php</code> action</td><td>Manager approve/reject</td><td>Status updated, notification sent, log written</td></tr>
+<tr><td>7.10</td><td><code>syncPayrollCashAdvanceRequests()</code></td><td>Approved cash advance before payroll run</td><td>Deducted in next payroll net</td></tr>
+</tbody>
+</table>
+
+<div class="pagebreak"></div>
+<h3>Series 800: Analytics, Reports and Exports</h3>
+<table>
+<thead><tr><th>Unit ID</th><th>Target Function</th><th>Testing Scenario Profile</th><th>Expected Result</th></tr></thead>
+<tbody>
+<tr><td>8.1</td><td><code>payroll_analytics.php</code> completion rate</td><td>Completed/assigned per staff</td><td>Correct percent</td></tr>
+<tr><td>8.2</td><td>variance compute</td><td>Two periods compared</td><td>Correct plus/minus percent</td></tr>
+<tr><td>8.3</td><td><code>analytics.php</code> dataset</td><td>Filter branch/range</td><td>Bucketed, role-scoped correctly</td></tr>
+<tr><td>8.4</td><td><code>reports.php</code> export</td><td>Click Export PDF/CSV</td><td>Clean, uncorrupted download</td></tr>
+</tbody>
+</table>
+
+<h3>Series 900: Real-Time Activity Log, Notifications and Security</h3>
+<table>
+<thead><tr><th>Unit ID</th><th>Target Function</th><th>Testing Scenario Profile</th><th>Expected Result</th></tr></thead>
+<tbody>
+<tr><td>9.1</td><td><code>autoLogApiActivity()</code> (utils.php)</td><td>Any CRUD or payroll run via API</td><td>Append-only <code>activity_log</code> row (actor/action/module/timestamp/IP)</td></tr>
+<tr><td>9.2</td><td><code>activity-logs.php</code> query</td><td>Filter by user/date/keyword</td><td>Matching rows, newest-first</td></tr>
+<tr><td>9.3</td><td>log immutability (no update/delete route)</td><td>Attempt edit/delete log row</td><td>Rejected, append-only enforced</td></tr>
+<tr><td>9.4</td><td><code>notifications.php</code> / <code>ai_notifications.php</code></td><td>After assignment/payroll approve</td><td>Real-time feed (liveSync/poll)</td></tr>
+<tr><td>9.5</td><td><code>enforceIntruderBrowserLockout()</code> + <code>getIntruderBrowserBlockInfo()</code></td><td>Blocked browser hits auth</td><td>429 globally until <code>blocked_until</code></td></tr>
+<tr><td>9.6</td><td><code>enforceRequestRateLimit()</code> + <code>enforceSystemLockdown()</code></td><td>Burst requests / lockdown active</td><td>Rate limited / lockdown denies non-bypass</td></tr>
+<tr><td>9.7</td><td><code>settings_api.php</code> change</td><td>Change OT multiplier/timeout/policy</td><td>Saved to <code>settings</code>, applied, audit logged</td></tr>
+</tbody>
+</table>
+
+<div class="pagebreak"></div>
+<h2>LEVEL 2: Master Integration Testing Registry</h2>
+<table>
+<thead><tr><th>ID</th><th>Target Flow</th><th>Testing Scenario Profile</th><th>Expected Result</th></tr></thead>
+<tbody>
+<tr><td>2.1</td><td>Login to Session/RBAC</td><td><code>index.tsx</code> to <code>handleLoginPrecheck</code> to <code>handleLoginComplete</code></td><td>HttpOnly cookie, <code>dashboard_path</code>, role menu visible</td></tr>
+<tr><td>2.2</td><td>Dashboard to APIs</td><td>Open role dashboard</td><td>Fetches analytics/payroll/projects, renders without reload</td></tr>
+<tr><td>2.3</td><td>Branch to Employee to User</td><td>Create chain in sequence</td><td>FK integrity, manager rule, user in list</td></tr>
+<tr><td>2.4</td><td>Client to Project</td><td>Create client then project</td><td><code>client_id</code> persisted, visible in list/calendar</td></tr>
+<tr><td>2.5</td><td>Task Creation to Workflow</td><td>Manager <code>POST /api/tasks.php</code></td><td>Validated, persisted, 201, log written</td></tr>
+<tr><td>2.6</td><td>Task to Activity Logger</td><td>Update status/collaborator</td><td>Same flow writes <code>activity_log</code></td></tr>
+<tr><td>2.7</td><td>XLS Import to Payroll</td><td>Upload via <code>attendance_import</code></td><td>Validated to payable hours to payroll run</td></tr>
+<tr><td>2.8</td><td>Payroll to Deduction/Analytics</td><td>Run payroll period</td><td>Gross to deductions to net, analytics KPI updated</td></tr>
+<tr><td>2.9</td><td>Live Feed to Log Query</td><td>Multi-branch users act</td><td>Feed appends in real time</td></tr>
+<tr><td>2.10</td><td>Branch Entry to Central DB</td><td>Branch A creates task/payroll</td><td>Centralized MySQL, instant Branch B view</td></tr>
+<tr><td>2.11</td><td>Approval to Notifications</td><td>Request to Manager approve</td><td>Status change to notification + email</td></tr>
+<tr><td>2.12</td><td>Upload to Serve-File</td><td>Upload PDF to task</td><td>Path stored, streaming auth check</td></tr>
+<tr><td>2.13</td><td>Settings to Behavior</td><td>Change OT multiplier/timeout/policy</td><td>Saved to <code>settings</code>, applied, audit logged</td></tr>
+</tbody>
+</table>
+
+<div class="pagebreak"></div>
+<h2>LEVEL 3: Master System Testing (End-to-End via UI, starts at Login)</h2>
+
+<h3>Series 100: Login and Access</h3>
+<table>
+<thead><tr><th>ID</th><th>Module</th><th>Step-by-Step Procedure</th><th>Inputs</th><th>Expected Response</th></tr></thead>
+<tbody>
+<tr><td>3-1.1</td><td>Login Success</td><td>1. Open <code>/</code> 2. Valid gmail email + strong password 3. LOG IN 4. Robot/captcha check</td><td>Valid creds</td><td>Checkmark to role dashboard</td></tr>
+<tr><td>3-1.2</td><td>Login Failure</td><td>1. <code>/</code> 2. Valid user + wrong password 3. LOG IN</td><td>WrongPass123</td><td>Invalid credentials, attempts 3 to 2 to 1</td></tr>
+<tr><td>3-1.3</td><td>Account Lockout</td><td>Repeat 3-1.2 to threshold</td><td>4th fail</td><td>Account locked, <code>status=locked</code></td></tr>
+<tr><td>3-1.4</td><td>Intruder Block</td><td>Non-existent email x10 same browser</td><td>fake@nowhere.com x10</td><td>429 on 10th, blocks valid login</td></tr>
+<tr><td>3-1.5</td><td>Password Masking</td><td>Type in password field</td><td>Any string</td><td>Bullets, eye toggle</td></tr>
+<tr><td>3-1.6</td><td>Forgot Password</td><td>Click with email filled</td><td>existing email</td><td>Redirect <code>/forgot-password?email=</code></td></tr>
+<tr><td>3-1.7</td><td>First-Login Change</td><td>Login temp password</td><td>new user temp</td><td>Force <code>/reset-password?mode=first_login</code></td></tr>
+<tr><td>3-1.8</td><td>Password Expiry</td><td>Login expired</td><td>expired user</td><td>Redirect <code>/change-password?reason=expired</code></td></tr>
+<tr><td>3-1.9</td><td>Role Redirect</td><td>Staff enter <code>/admin/dashboard</code></td><td>URL</td><td>Blocked <code>/403</code></td></tr>
+<tr><td>3-1.10</td><td>Logout</td><td>Logout to Back button</td><td>-</td><td>Session terminated, no restore</td></tr>
+</tbody>
+</table>
+
+<h3>Series 200: Dashboards</h3>
+<table>
+<thead><tr><th>ID</th><th>Module</th><th>Procedure</th><th>Inputs</th><th>Expected</th></tr></thead>
+<tbody>
+<tr><td>3-2.1</td><td>Staff Dashboard</td><td>Login Staff to <code>/dashboard</code></td><td>-</td><td>My Tasks stats, Project Count, doughnut, trends, calendar</td></tr>
+<tr><td>3-2.2</td><td>Admin Dashboard</td><td>Login Admin to <code>/admin/dashboard</code></td><td>-</td><td>Banner + counts, payroll KPI, bar, activity feed</td></tr>
+<tr><td>3-2.3</td><td>Manager Dashboard</td><td>Login Manager to <code>/manager/dashboard</code></td><td>-</td><td>Precheck/payroll approvals, team tasks</td></tr>
+<tr><td>3-2.4</td><td>Calendar Drill</td><td>Click day w/ green/red dot</td><td>date</td><td>Modal lists tasks for date</td></tr>
+</tbody>
+</table>
+
+<h3>Series 300: Master Data</h3>
+<table>
+<thead><tr><th>ID</th><th>Module</th><th>Procedure</th><th>Inputs</th><th>Expected</th></tr></thead>
+<tbody>
+<tr><td>3-3.1</td><td>Branches</td><td>Admin to Branches to Add to Save</td><td>New branch</td><td>Row appears, dup prevented</td></tr>
+<tr><td>3-3.2</td><td>Employees</td><td>Employees to Add to Save</td><td>Valid employee+branch</td><td>Appears, salary numeric</td></tr>
+<tr><td>3-3.3</td><td>Users</td><td>Users to Create to Fill to Save</td><td>john@gmail.com / Str0ng!Pass</td><td>201, list, must_reset=1</td></tr>
+<tr><td>3-3.4</td><td>Duplicate User</td><td>Same email</td><td>dup</td><td>409 Email already in use</td></tr>
+<tr><td>3-3.5</td><td>One Manager/Branch</td><td>2nd manager same branch</td><td>branch_id</td><td>409 Only one manager</td></tr>
+<tr><td>3-3.6</td><td>Form Validation</td><td>Blank required to Submit</td><td>blank</td><td>This field is required</td></tr>
+<tr><td>3-3.7</td><td>Numeric Boundaries</td><td>Rate as text</td><td>text</td><td>Enter valid numeric value</td></tr>
+</tbody>
+</table>
+
+<div class="pagebreak"></div>
+<h3>Series 400: Client and Project</h3>
+<table>
+<thead><tr><th>ID</th><th>Module</th><th>Procedure</th><th>Inputs</th><th>Expected</th></tr></thead>
+<tbody>
+<tr><td>3-4.1</td><td>Create Client</td><td>Clients to Add to Save</td><td>Client data</td><td>Active row, in dropdowns</td></tr>
+<tr><td>3-4.2</td><td>Create Project</td><td>Projects to Add to link Client+Manager</td><td>Valid dates/budget</td><td>Active, in calendar</td></tr>
+</tbody>
+</table>
+
+<h3>Series 500: Task Workflow</h3>
+<table>
+<thead><tr><th>ID</th><th>Module</th><th>Procedure</th><th>Inputs</th><th>Expected</th></tr></thead>
+<tbody>
+<tr><td>3-5.1</td><td>Create Task</td><td>Tasks to Create to assign+due+priority+project to Save</td><td>Valid task</td><td>Pending, in My Tasks + log</td></tr>
+<tr><td>3-5.2</td><td>My Tasks</td><td>Staff <code>/my-tasks</code></td><td>-</td><td>Assigned+collab listed, paginated</td></tr>
+<tr><td>3-5.3</td><td>Status</td><td>Open to In Progress to Completed</td><td>status</td><td>Timestamp, log, doughnut update</td></tr>
+<tr><td>3-5.4</td><td>Collaborators</td><td>Add collaborator shift range</td><td>user+dates</td><td>Row shows, shift validated</td></tr>
+<tr><td>3-5.5</td><td>Checklist</td><td>Add item + proof</td><td>description</td><td>Item toggles w/ proof</td></tr>
+<tr><td>3-5.6</td><td>Search/Filter</td><td>Filter status/branch/date</td><td>filters</td><td>Only matching, newest first</td></tr>
+<tr><td>3-5.7</td><td>Pagination</td><td>Next/Page 2</td><td>click</td><td>No duplicate/skip</td></tr>
+</tbody>
+</table>
+
+<h3>Series 600: Documents and Services</h3>
+<table>
+<thead><tr><th>ID</th><th>Module</th><th>Procedure</th><th>Inputs</th><th>Expected</th></tr></thead>
+<tbody>
+<tr><td>3-6.1</td><td>Upload Document</td><td>Task to Documents to Upload PDF</td><td>file</td><td>Stored, preview via serve-file, branch auth</td></tr>
+<tr><td>3-6.2</td><td>Service Checklist</td><td>Task to Services to generate checklist</td><td>template</td><td>Checklist per engagement</td></tr>
+</tbody>
+</table>
+
+<h3>Series 700: Payroll and HR</h3>
+<table>
+<thead><tr><th>ID</th><th>Module</th><th>Procedure</th><th>Inputs</th><th>Expected</th></tr></thead>
+<tbody>
+<tr><td>3-7.1</td><td>XLS Import</td><td>Import Review to Upload XLS</td><td>biometric export</td><td>Preview parsed, matched, errors flagged</td></tr>
+<tr><td>3-7.2</td><td>Convert Hours</td><td>Confirm import</td><td>valid pairs</td><td>Payable hours match manual</td></tr>
+<tr><td>3-7.3</td><td>Run Payroll</td><td>Payroll to period to Run to Confirm</td><td>period</td><td>Gross to deductions to net, 2 decimals, no errors</td></tr>
+<tr><td>3-7.4</td><td>Payslip</td><td>My Payslips to View</td><td>-</td><td>Breakdown, PDF export clean</td></tr>
+<tr><td>3-7.5</td><td>Deduction Types</td><td>Settings to Deduction Types CRUD</td><td>threshold</td><td>Saved, applied next run, logged</td></tr>
+<tr><td>3-7.6</td><td>Requests</td><td>Staff request to Manager Inbox to Approve</td><td>request</td><td>Pending to Approved, notification, payroll adj</td></tr>
+<tr><td>3-7.7</td><td>Shift Schedules</td><td>Create shift</td><td>dates</td><td>Visible in calendar</td></tr>
+</tbody>
+</table>
+
+<div class="pagebreak"></div>
+<h3>Series 800: Analytics, Reports, Notifications</h3>
+<table>
+<thead><tr><th>ID</th><th>Module</th><th>Procedure</th><th>Inputs</th><th>Expected</th></tr></thead>
+<tbody>
+<tr><td>3-8.1</td><td>Analytics</td><td>Open Analytics + branch/range</td><td>filter</td><td>Charts scoped correctly</td></tr>
+<tr><td>3-8.2</td><td>Trend Variance</td><td>Multi-period</td><td>2 periods</td><td>Variance correct</td></tr>
+<tr><td>3-8.3</td><td>Math Audit</td><td>Run batch to analytics</td><td>sim data</td><td>System equals manual totals</td></tr>
+<tr><td>3-8.4</td><td>PDF Export</td><td>Reports to Export PDF</td><td>click</td><td>Clean PDF download</td></tr>
+<tr><td>3-8.5</td><td>Excel/CSV</td><td>Reports to Export</td><td>click</td><td>Uncorrupted file</td></tr>
+<tr><td>3-8.6</td><td>Notifications</td><td>Action to check bell</td><td>action</td><td>Real-time notification</td></tr>
+</tbody>
+</table>
+
+<h3>Series 900: Activity Log and Security (ends at Logout)</h3>
+<table>
+<thead><tr><th>ID</th><th>Module</th><th>Procedure</th><th>Inputs</th><th>Expected</th></tr></thead>
+<tbody>
+<tr><td>3-9.1</td><td>Live Log</td><td>Open log to 2nd session edits</td><td>concurrent</td><td>New entry realtime</td></tr>
+<tr><td>3-9.2</td><td>Filtering</td><td>Filter by user+date</td><td>user+range</td><td>Only matches, sorted</td></tr>
+<tr><td>3-9.3</td><td>Immutability</td><td>Edit/delete log row</td><td>attempt</td><td>Blocked, append-only</td></tr>
+<tr><td>3-9.4</td><td>Cross-Branch</td><td>Branch A action to Branch B view</td><td>action</td><td>Visible real-time</td></tr>
+<tr><td>3-9.5</td><td>Settings Profiling</td><td>Change OT/timeout to Save</td><td>value</td><td>Applied next run, logged</td></tr>
+<tr><td>3-9.6</td><td>Scope Compliance</td><td>Look for BIR/SSS submit button</td><td>screen</td><td>None (limitation)</td></tr>
+<tr><td>3-9.7</td><td>Logout</td><td>Click Logout</td><td>-</td><td>Session destroyed, login required</td></tr>
+</tbody>
+</table>
+
+<div class="pagebreak"></div>
+<h2>LEVEL 4: User Acceptance Testing (UAT) - ISO/IEC 25010</h2>
+<p>Execute full login-to-logout script above, then rate each criterion (5=Strongly Agree to 1=Strongly Disagree).</p>
+<h3>Participant Matrix (4 purposive respondents, Lope Laranjo Bato and Co., CPAs - Main Branch)</h3>
+<table>
+<thead><tr><th>ID</th><th>Role</th><th>Org/Branch</th><th>Date</th><th>Signature</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>Administrator</td><td>Main</td><td>__/__/2026</td><td></td></tr>
+<tr><td>2</td><td>Manager</td><td>Main</td><td>__/__/2026</td><td></td></tr>
+<tr><td>3</td><td>Accounting Staff</td><td>Main</td><td>__/__/2026</td><td></td></tr>
+<tr><td>4</td><td>Accounting Staff</td><td>Main</td><td>__/__/2026</td><td></td></tr>
+</tbody>
+</table>
+
+<h3>Evaluation Criteria</h3>
+<table>
+<thead><tr><th>Quality Characteristic</th><th>5</th><th>4</th><th>3</th><th>2</th><th>1</th><th>Remarks</th></tr></thead>
+<tbody>
+<tr><td>Functional Suitability (correctness of login-to-end flows)</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>Usability (login, navigation, clarity)</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>Performance (real-time log, dashboard load)</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>Security (session, lockout, RBAC, log immutability)</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>Reliability (no crashed flows end-to-end)</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>Maintainability/Portability (docs, deploy, Electron)</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+</tbody>
+</table>
+
+<h3>Formal Sign-Off</h3>
+<p><em>"By signing below, I confirm participation in UAT covering the full login-to-logout workflow and accept for live deployment."</em></p>
+<table>
+<thead><tr><th>Participant</th><th>Name and Signature</th><th>Date</th></tr></thead>
+<tbody>
+<tr><td>Administrator</td><td></td><td></td></tr>
+<tr><td>Manager</td><td></td><td></td></tr>
+<tr><td>Staff 1</td><td></td><td></td></tr>
+<tr><td>Staff 2</td><td></td><td></td></tr>
+</tbody>
+</table>
+
+<div class="note">Regenerated 2026-08-22 directly from the codebase | Source of truth: <code>api/auth.php</code>, <code>api/utils.php</code>, <code>components/AuthProvider.tsx</code>, <code>pages/index.tsx</code>, <code>database/Capstone1.sql</code>, and the <code>api/*</code> endpoints referenced per series.</div>
+
+</body>
+</html>

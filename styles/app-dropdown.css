@@ -1,0 +1,581 @@
+/* ─── SYSTEM DROPDOWN STANDARD (all roles / all pages) ────────────────
+ * Rule 1 — Obvious trigger: 48px touch target, clear caret icon, hover feedback.
+ * Rule 2 — Flip on edge: if the menu would hit the viewport bottom it opens upward.
+ * Rule 3 — 10+ items = search (see components/AppSelect.tsx, threshold = 10).
+ * Rule 4 — Animate 150ms in/out.
+ *
+ * Notes:
+ * - Native <select> popups are rendered by the OS/browser, so open direction
+ *   and menu animation for THOSE are native. The trigger itself still gets the
+ *   48px target, caret, hover, and 150ms trigger transition below.
+ * - Custom menus (.app-dd-menu, SearchBar listbox, Layout dropdowns) get the
+ *   full treatment: flip class (.app-dd-menu--up / .app-flip-up) + 150ms in/out.
+ * - This file loads AFTER globals.css and re-enables transitions for dropdown
+ *   classes (globals.css globally kills transitions with !important).
+ */
+
+:root {
+  --dd-anim-ms: 150ms;
+  --dd-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --dd-ease-in: cubic-bezier(0.55, 0.06, 0.68, 0.19);
+  --dd-touch: 48px;
+  --dd-option-touch: 48px;
+  --dd-border: #cbd5e1;
+  --dd-border-hover: #64748b;
+  --dd-border-open: #1e3a8a;
+  --dd-bg: #ffffff;
+  --dd-bg-hover: #f8fafc;
+  --dd-bg-option-hover: #eff6ff;
+  --dd-text: #0f172a;
+  --dd-muted: #64748b;
+  --dd-ring: rgba(30, 58, 138, 0.16);
+  --dd-menu-shadow: 0 16px 40px rgba(15, 23, 42, 0.18), 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   RULE 1 — NATIVE <select> TRIGGER UPGRADE (system-wide)
+   Obvious trigger: bordered control, clear caret, hover. Height hugs the
+   standard 36px control rhythm so selects sit even beside search bars and
+   pill buttons instead of looking fat. (The full 48px touch target lives on
+   the AppSelect custom trigger + native focus ring, not on every select.)
+   ═══════════════════════════════════════════════════════════════════ */
+
+select,
+select.notificationCenterSelect,
+.pageInlineFilters select,
+.page-filter-inline select,
+.myTasksFilters select {
+  min-height: 36px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  padding-left: 12px !important;
+  /* Room for the clear caret icon */
+  padding-right: 32px !important;
+  line-height: 36px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--dd-text) !important;
+  background-color: var(--dd-bg) !important;
+  /* Clear caret icon (chevron) — always visible, rotates natively on open
+     in supporting browsers via :open pseudo-class (progressive enhancement). */
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 10px center !important;
+  background-size: 14px 14px !important;
+  border: 1.5px solid var(--dd-border) !important;
+  border-radius: 8px !important;
+  cursor: pointer !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  /* Re-enable the 150ms trigger transition (globals.css kills all transitions). */
+  transition-property: background-color, border-color, box-shadow, color !important;
+  transition-duration: var(--dd-anim-ms) !important;
+  transition-timing-function: var(--dd-ease-out) !important;
+  transition-delay: 0ms !important;
+}
+
+/* Hover state feedback — obvious affordance on every select trigger. */
+select:hover:not(:disabled):not([aria-disabled="true"]),
+.pageInlineFilters select:hover:not(:disabled),
+.page-filter-inline select:hover:not(:disabled) {
+  border-color: var(--dd-border-hover) !important;
+  background-color: var(--dd-bg-hover) !important;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.1) !important;
+}
+
+/* Open / focus state — brand ring so the trigger reads as active. */
+select:focus-visible,
+select:active:not(:disabled),
+select[data-open="true"] {
+  border-color: var(--dd-border-open) !important;
+  background-color: #ffffff !important;
+  box-shadow: 0 0 0 3px var(--dd-ring) !important;
+  outline: none !important;
+}
+
+select:disabled {
+  cursor: not-allowed !important;
+  opacity: 0.6 !important;
+  background-color: #f1f5f9 !important;
+}
+
+/* Native option rows — limited cross-browser styling, but keep readable. */
+select option {
+  font-size: 13px;
+  color: #0f172a;
+  background: #ffffff;
+  padding: 12px;
+}
+
+/* Fit exception — dense toolbar / filter-row selects hug their row (36px)
+   instead of the full 48px form touch target. Form selects keep 48px. */
+.pageInlineFilters select,
+.page-filter-inline select,
+.myTasksFilters select,
+select.notificationCenterSelect {
+  min-height: 36px !important;
+  line-height: 36px !important;
+  padding-right: 34px !important;
+  font-size: 12px !important;
+  border-radius: 8px !important;
+}
+
+/* Compact chart-period selects (dashboard Month/Year pills, all roles):
+   hug the small pill buttons instead of the standard control height. */
+select[aria-label="Select month"],
+select[aria-label="Select year"] {
+  min-height: 28px !important;
+  line-height: 28px !important;
+  padding-right: 24px !important;
+  padding-left: 8px !important;
+  font-size: 11px !important;
+  background-position: right 7px center !important;
+  background-size: 12px 12px !important;
+  border-radius: 8px !important;
+}
+
+select[aria-label="Select month"] {
+  width: 80px !important;
+}
+
+select[aria-label="Select year"] {
+  width: 62px !important;
+}
+
+/* Dashboard chart headers (staff / manager / admin): the 7-Days + Month +
+   Year controls stay on ONE line, vertically centered with the card title.
+   If space ever runs short, the title ellipsizes — the controls never wrap. */
+h3:has(> span > select[aria-label="Select month"]) {
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+}
+
+h3:has(> span > select[aria-label="Select month"]) > span:first-child {
+  min-width: 0 !important;
+  flex: 0 1 auto !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+h3:has(> span > select[aria-label="Select month"]) > span:last-child {
+  flex: 0 0 auto !important;
+  flex-wrap: nowrap !important;
+  margin-left: auto !important;
+}
+
+h3:has(> span > select[aria-label="Select month"]) > span:last-child > button {
+  min-height: 28px !important;
+  padding: 4px 8px !important;
+  font-size: 11px !important;
+}
+
+/* Fit exception — labeled filter cards (Search + Client + Type + … rows used
+   on every list page): the label + 36px control stack stays compact so the
+   card hugs its content instead of looking fat. */
+label > select,
+label select {
+  min-height: 36px !important;
+  line-height: 36px !important;
+  font-size: 12px !important;
+  border-radius: 8px !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   RULE 1 — CUSTOM DROPDOWN TRIGGER (AppSelect + retrofitted triggers)
+   ═══════════════════════════════════════════════════════════════════ */
+
+.app-dd {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+  min-width: 0;
+}
+
+.app-dd-trigger {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  width: 100% !important;
+  min-height: var(--dd-touch) !important;
+  padding: 0 14px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  line-height: 1.3 !important;
+  color: var(--dd-text) !important;
+  background: var(--dd-bg) !important;
+  border: 1.5px solid var(--dd-border) !important;
+  border-radius: 10px !important;
+  cursor: pointer !important;
+  text-align: left !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  transition-property: background-color, border-color, box-shadow, color !important;
+  transition-duration: var(--dd-anim-ms) !important;
+  transition-timing-function: var(--dd-ease-out) !important;
+  transition-delay: 0ms !important;
+}
+
+.app-dd-trigger:hover:not(:disabled):not([aria-disabled="true"]) {
+  border-color: var(--dd-border-hover) !important;
+  background-color: var(--dd-bg-hover) !important;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.1) !important;
+}
+
+.app-dd-trigger:focus-visible,
+.app-dd-trigger[data-open="true"] {
+  border-color: var(--dd-border-open) !important;
+  box-shadow: 0 0 0 3px var(--dd-ring) !important;
+  outline: none !important;
+}
+
+.app-dd-trigger:disabled,
+.app-dd-trigger[aria-disabled="true"] {
+  cursor: not-allowed !important;
+  opacity: 0.6 !important;
+  background: #f1f5f9 !important;
+}
+
+.app-dd-trigger-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Clear caret icon — chevron that rotates 180° when open. */
+.app-dd-caret {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: #334155;
+  transition: transform var(--dd-anim-ms) var(--dd-ease-out) !important;
+}
+
+.app-dd-trigger[data-open="true"] .app-dd-caret {
+  transform: rotate(180deg) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CUSTOM MENU — base, flip (Rule 2), 150ms in/out (Rule 4)
+   ═══════════════════════════════════════════════════════════════════ */
+
+.app-dd-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  bottom: auto;
+  left: 0;
+  right: 0;
+  z-index: 60000;
+  min-width: 100%;
+  max-height: min(340px, calc(100vh - 120px));
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: var(--dd-menu-shadow);
+  padding: 6px;
+  transform-origin: top center;
+  animation: app-dd-in var(--dd-anim-ms) var(--dd-ease-out) both;
+}
+
+/* Rule 2 — flipped: opens upward when it would hit the viewport bottom. */
+.app-dd-menu--up,
+.app-dd-menu.app-flip-up {
+  top: auto;
+  bottom: calc(100% + 8px);
+  transform-origin: bottom center;
+  animation-name: app-dd-in-up;
+}
+
+/* Rule 4 — out animation: applied for 150ms before unmount (see AppSelect). */
+.app-dd-menu.is-closing {
+  animation: app-dd-out var(--dd-anim-ms) var(--dd-ease-in) both;
+}
+
+.app-dd-menu--up.is-closing,
+.app-dd-menu.app-flip-up.is-closing {
+  animation-name: app-dd-out-up;
+}
+
+@keyframes app-dd-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes app-dd-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes app-dd-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+}
+
+@keyframes app-dd-out-up {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SYSTEM SEARCH BAR — clear (X) button must stay a 20px circle INSIDE
+   the field. globals.css force-grows every inline-flex + border-radius
+   button to 32px min, which pushed the X outside / made it pill-shaped,
+   so opt every [data-search-clear] out and pin its geometry here (higher
+   specificity + !important wins both injection orders).
+   ═══════════════════════════════════════════════════════════════════ */
+
+button.llb-search-clear[data-search-clear="true"],
+button[data-search-clear="true"] {
+  position: absolute !important;
+  right: 6px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px !important;
+  min-height: 20px !important;
+  max-width: 20px !important;
+  max-height: 20px !important;
+  flex: 0 0 auto !important;
+  flex-shrink: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 50% !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #94a3b8 !important;
+  cursor: pointer !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+}
+
+button.llb-search-clear[data-search-clear="true"]:hover,
+button[data-search-clear="true"]:hover {
+  color: #475569 !important;
+  background: #f1f5f9 !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   RULE 3 — MENU SEARCH (auto-rendered when options >= 10)
+   ═══════════════════════════════════════════════════════════════════ */
+
+.app-dd-search {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 6px;
+  background: #ffffff;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.app-dd-search input {
+  width: 100% !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  max-height: 44px !important;
+  line-height: 44px !important;
+  padding: 0 12px 0 36px !important;
+  font-size: 13px !important;
+  border: 1.5px solid var(--dd-border) !important;
+  border-radius: 8px !important;
+  background-color: #f8fafc !important;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: 11px center !important;
+  transition-property: border-color, box-shadow, background-color !important;
+  transition-duration: var(--dd-anim-ms) !important;
+  transition-timing-function: var(--dd-ease-out) !important;
+}
+
+.app-dd-search input:hover {
+  border-color: var(--dd-border-hover) !important;
+}
+
+.app-dd-search input:focus {
+  border-color: var(--dd-border-open) !important;
+  background-color: #ffffff !important;
+  box-shadow: 0 0 0 3px var(--dd-ring) !important;
+  outline: none !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MENU OPTIONS — 48px touch rows + hover feedback (Rule 1)
+   ═══════════════════════════════════════════════════════════════════ */
+
+.app-dd-option {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  width: 100% !important;
+  min-height: var(--dd-option-touch) !important;
+  padding: 8px 12px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  line-height: 1.35 !important;
+  color: var(--dd-text) !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  cursor: pointer !important;
+  text-align: left !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  transition-property: background-color, color !important;
+  transition-duration: var(--dd-anim-ms) !important;
+  transition-timing-function: var(--dd-ease-out) !important;
+}
+
+.app-dd-option:hover,
+.app-dd-option[data-highlighted="true"] {
+  background: var(--dd-bg-option-hover) !important;
+}
+
+.app-dd-option[data-selected="true"] {
+  background: #e0e9ff !important;
+  font-weight: 700 !important;
+}
+
+.app-dd-option:focus-visible {
+  outline: none !important;
+  box-shadow: inset 0 0 0 2px rgba(30, 58, 138, 0.4) !important;
+}
+
+.app-dd-option:disabled,
+.app-dd-option[aria-disabled="true"] {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
+
+.app-dd-option-check {
+  flex: 0 0 auto;
+  display: inline-flex;
+  color: #1e3a8a;
+  visibility: hidden;
+}
+
+.app-dd-option[data-selected="true"] .app-dd-option-check {
+  visibility: visible;
+}
+
+.app-dd-empty {
+  padding: 20px 12px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--dd-muted);
+}
+
+.app-dd-count {
+  padding: 6px 12px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   RETROFIT — existing custom dropdowns follow the same 4 rules
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Shared menu animation (150ms in) for Layout + SearchBar + row menus. */
+.app-anim-menu {
+  animation: app-dd-in var(--dd-anim-ms) var(--dd-ease-out) both;
+  transform-origin: top center;
+}
+
+.app-anim-menu.app-flip-up {
+  top: auto !important;
+  bottom: calc(100% + 8px) !important;
+  transform-origin: bottom center;
+  animation-name: app-dd-in-up;
+}
+
+.app-anim-menu.is-closing {
+  animation: app-dd-out var(--dd-anim-ms) var(--dd-ease-in) both;
+}
+
+.app-anim-menu.app-flip-up.is-closing {
+  animation-name: app-dd-out-up;
+}
+
+/* Profile trigger: obvious 48px target + caret slot + hover feedback. */
+.app-profile-trigger {
+  min-height: var(--dd-touch) !important;
+  border: 1.5px solid transparent !important;
+  transition-property: background-color, border-color, box-shadow !important;
+  transition-duration: var(--dd-anim-ms) !important;
+  transition-timing-function: var(--dd-ease-out) !important;
+}
+
+.app-profile-trigger:hover {
+  background: #f1f5f9 !important;
+  border-color: var(--dd-border) !important;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.1) !important;
+}
+
+.app-profile-trigger:focus-visible,
+.app-profile-trigger[data-open="true"] {
+  border-color: var(--dd-border-open) !important;
+  box-shadow: 0 0 0 3px var(--dd-ring) !important;
+  outline: none !important;
+}
+
+/* Row action menu items: touch-friendly rows + hover feedback. */
+.app-row-menu button {
+  min-height: 44px !important;
+  transition-property: background-color !important;
+  transition-duration: var(--dd-anim-ms) !important;
+  transition-timing-function: var(--dd-ease-out) !important;
+}
+
+.app-row-menu button:hover:not(:disabled) {
+  background-color: var(--dd-bg-option-hover) !important;
+}
+
+/* Respect users who prefer reduced motion: instant open/close. */
+@media (prefers-reduced-motion: reduce) {
+  .app-dd-trigger,
+  .app-dd-menu,
+  .app-dd-caret,
+  .app-dd-option,
+  .app-anim-menu,
+  select {
+    animation: none !important;
+    transition-property: none !important;
+    transition-duration: 0s !important;
+  }
+}

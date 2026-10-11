@@ -1,0 +1,2386 @@
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  --form-radius: 12px;
+  --modal-radius: 16px;
+  --card-radius: 12px;
+  --button-radius: 10px;
+  --font-ui: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --motion-fast: 140ms;
+  --motion-medium: 180ms;
+  --motion-slow: 240ms;
+  --motion-modal: 320ms;
+  --card-bg: #fdfdfc;
+  --card-shadow: 0 2px 6px rgba(15, 23, 42, 0.06), 0 12px 28px rgba(15, 23, 42, 0.06), 0 0 0 1px rgba(15, 23, 42, 0.04);
+  --press-scale: 0.985;
+}
+
+/* ===== GLOBAL CURVED EDGES FOR ALL FORMS / MODALS / CARDS ===== */
+
+/*
+ * Target every inline-styled modal overlay (position:fixed backdrop)
+ * and curve the first child (the white modal panel).
+ * This covers Add/Edit Employee, Delete confirms, all float forms, etc.
+ */
+div[style*="position: fixed"][style*="display: flex"][style*="align-items: center"]>div,
+div[style*="position: fixed"][style*="display: flex"][style*="align-items:center"]>div,
+div[style*="inset: 0"][style*="display: flex"][style*="align-items: center"]>div,
+div[style*="inset: 0px"][style*="display: flex"][style*="align-items: center"]>div {
+  border-radius: var(--modal-radius) !important;
+}
+
+/* Cards / panels with white background used as form containers */
+div[style*="background: white"][style*="padding"],
+div[style*="background-color: white"][style*="padding"],
+div[style*="background: rgb(255, 255, 255)"][style*="padding"] {
+  border-radius: var(--card-radius) !important;
+}
+
+/* All buttons in the system — slightly more curved */
+button {
+  border-radius: var(--button-radius) !important;
+  box-sizing: border-box !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  font-family: inherit;
+  line-height: 1.2 !important;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  will-change: transform, box-shadow, filter;
+  transition-property: transform, box-shadow, filter, background-color, border-color, color, opacity !important;
+  transition-duration: var(--motion-fast) !important;
+  transition-timing-function: var(--ease-out) !important;
+  transition-delay: 0ms !important;
+}
+
+/* Dropdown menus / popups that appear on action buttons */
+div[style*="position: absolute"][style*="border-radius"] {
+  border-radius: var(--form-radius) !important;
+}
+
+/* Filter / search bar containers */
+div[style*="box-shadow"][style*="display: flex"][style*="gap"] {
+  border-radius: var(--card-radius) !important;
+}
+
+/* Table wrapper containers */
+div[style*="box-shadow"][style*="overflow"] {
+  border-radius: var(--card-radius) !important;
+}
+
+/* Settings / card panels with border */
+div[style*="background"][style*="border: 1px"][style*="border-radius"] {
+  border-radius: var(--card-radius) !important;
+}
+
+html,
+body,
+#__next {
+  height: 100%;
+}
+
+/* ===== LIVE-SYNC FADE TRANSITION =====
+ * Wrap your page data container with className="live-sync-fade".
+ * When useLiveSync triggers a background refresh it briefly adds
+ * "live-sync-refreshing" which fades the content to 40% opacity,
+ * swaps the data, then removes the class so it fades back to full
+ * opacity over 1 second — smooth and unobtrusive.
+ */
+.live-sync-fade {
+  transition: opacity 1s ease;
+  opacity: 1;
+}
+
+.live-sync-fade.live-sync-refreshing {
+  opacity: 0.4;
+  transition: opacity 0.18s ease;
+}
+
+html {
+  zoom: 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Keep scrolling immediate on long admin pages. */
+html,
+body,
+#__next,
+* {
+  scroll-behavior: auto !important;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: #f4f6f8;
+  /* Match app container background to avoid edge contrast */
+  color: #171717;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-optical-sizing: auto;
+  font-kerning: normal;
+  font-synthesis: none;
+}
+
+/* Cap headings to 14px to match design */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-size: 14px !important;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+/* Hide Next.js development indicator (floating N button) */
+#__next-build-watcher,
+nextjs-portal {
+  display: none !important;
+}
+
+/* Global form controls */
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="number"],
+input[type="date"],
+input[type="time"],
+input[type="search"],
+input[type="tel"],
+input[type="file"],
+select,
+textarea {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: block;
+  font-family: inherit;
+  padding: 4px 6px;
+  margin: 2px 0;
+  font-size: 12px;
+  line-height: 1.3;
+  color: #111827;
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: var(--form-radius) !important;
+  min-width: 0;
+  /* Edge curve */
+  outline: none;
+  transition:
+    border-color var(--motion-fast) var(--ease-out),
+    box-shadow var(--motion-fast) var(--ease-out),
+    background-color var(--motion-fast) var(--ease-out);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #9ca3af;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #1e3a8a;
+  box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.15);
+}
+
+/* File inputs (rounded button + field) */
+input[type="file"] {
+  width: auto;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+input[type="file"]::file-selector-button {
+  margin-right: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--form-radius) !important;
+  padding: 6px 10px;
+  background: #f8fafc;
+  color: #334155;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
+}
+
+input[type="file"]::-webkit-file-upload-button {
+  margin-right: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--form-radius) !important;
+  padding: 6px 10px;
+  background: #f8fafc;
+  color: #334155;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
+}
+
+/* Rounded checkboxes and radios */
+input[type="checkbox"],
+input[type="radio"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  display: inline-grid;
+  place-content: center;
+  flex-shrink: 0;
+}
+
+input[type="checkbox"] {
+  border-radius: calc(var(--form-radius) / 2) !important;
+}
+
+input[type="radio"] {
+  border-radius: 999px;
+}
+
+input[type="checkbox"]::after,
+input[type="radio"]::after {
+  content: "";
+  opacity: 0;
+  transform: scale(0.72);
+  transition:
+    transform var(--motion-fast) var(--ease-out),
+    opacity var(--motion-fast) var(--ease-out);
+  background: #1e3a8a;
+}
+
+input[type="checkbox"]::after {
+  width: 10px;
+  height: 10px;
+  border-radius: calc(var(--form-radius) / 3);
+}
+
+input[type="radio"]::after {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+input[type="checkbox"]:checked::after,
+input[type="radio"]:checked::after {
+  opacity: 1;
+  transform: scale(1);
+}
+
+input[type="checkbox"]:focus-visible,
+input[type="radio"]:focus-visible {
+  outline: 2px solid rgba(30, 58, 138, 0.25);
+  outline-offset: 2px;
+}
+
+input[type="checkbox"]:disabled,
+input[type="radio"]:disabled {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  cursor: not-allowed;
+}
+
+input[type="checkbox"]:disabled::after,
+input[type="radio"]:disabled::after {
+  background: #94a3b8;
+}
+
+/* Prevent overlapping and ensure vertical rhythm */
+form,
+.form,
+.form-group,
+.formRow,
+.form-row {
+  display: block;
+}
+
+.form-group,
+.formGroup,
+.form-field,
+.formField {
+  margin-bottom: 6px;
+}
+
+/* Form field titles (labels above inputs) — bold system-wide */
+label {
+  display: inline-block;
+  margin-bottom: 2px;
+  color: #374151;
+  font-size: 11px;
+  font-weight: 700 !important;
+}
+
+/* Field titles placed as sibling text above inputs (common pattern) */
+label[style],
+.form-group > label,
+.formGroup > label,
+.form-field > label,
+.formField > label,
+.modalForm label,
+.modalGrid label,
+.form-group > span:first-child,
+.formGroup > span:first-child,
+.pageInlineFilters label > span,
+.page-filter-inline label > span {
+  font-weight: 700 !important;
+}
+
+/* Explicit field title pattern: label immediately followed by a control */
+label:has(+ input),
+label:has(+ textarea),
+label:has(+ select),
+label:has(+ div > input),
+label:has(+ div > textarea),
+label:has(+ div > select) {
+  font-weight: 700 !important;
+}
+
+
+/* Inline groups: ensure spacing */
+.input-group,
+.inputGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.input-group>* {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Selects */
+select {
+  background-color: #ffffff;
+}
+
+/* Textareas */
+textarea {
+  min-height: 45px;
+  resize: vertical;
+}
+
+/* Error state helper (optional class) */
+.input-error,
+.is-invalid {
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1) !important;
+}
+
+/* Disabled */
+input:disabled,
+select:disabled,
+textarea:disabled {
+  background-color: #f9fafb;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
+/* Compact forms within cards/tables */
+.card form .form-group,
+.table form .form-group {
+  margin-bottom: 4px;
+}
+
+/* SweetAlert2 (global notifications) */
+.swal2-container {
+  z-index: 200000 !important;
+}
+
+.swal-modern-popup {
+  border-radius: 16px !important;
+  border: 1px solid rgba(15, 23, 42, 0.08) !important;
+  box-shadow: none !important;
+}
+
+/* ── Centered toast card ─────────────────────────────────────── */
+.swal-stick-toast.swal2-popup.swal2-toast {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 0 !important;
+  width: auto !important;
+  max-width: min(560px, calc(100vw - 48px)) !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 16px 20px 18px 18px !important;
+  border-radius: 14px !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+  background: #fff !important;
+  border: 1px solid rgba(15, 23, 42, 0.09) !important;
+}
+
+/* Per-type accent border */
+.swal-stick-toast.swal2-icon-success { border-left: 4px solid #22c55e !important; }
+.swal-stick-toast.swal2-icon-error   { border-left: 4px solid #ef4444 !important; }
+.swal-stick-toast.swal2-icon-warning { border-left: 4px solid #f59e0b !important; }
+.swal-stick-toast.swal2-icon-info    { border-left: 4px solid #3b82f6 !important; }
+
+/* SVG icon injected via JS */
+.swal-toast-svg-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  margin-right: 12px;
+  line-height: 1;
+}
+
+.swal-toast-svg-icon svg {
+  display: block;
+}
+
+/* Fully suppress the native SweetAlert2 icon inside toasts (replaced by SVG) */
+.swal-stick-toast .swal2-icon {
+  display: none !important;
+}
+
+/* Enhanced success checkmark animation */
+.swal2-icon.swal2-success {
+  border-color: #22c55e !important;
+  animation: swal-success-icon-pulse 0.75s ease-out !important;
+}
+
+.swal2-icon.swal2-success .swal2-success-ring {
+  border-color: rgba(34, 197, 94, 0.3) !important;
+}
+
+.swal2-icon.swal2-success [class^='swal2-success-line'] {
+  background-color: #22c55e !important;
+}
+
+.swal2-icon.swal2-success .swal2-success-line-tip {
+  width: 1.25em !important;
+  left: 0.875em !important;
+  top: 2.875em !important;
+  transform: rotate(45deg) !important;
+  animation: swal-success-line-tip 0.75s ease-out !important;
+}
+
+.swal2-icon.swal2-success .swal2-success-line-long {
+  width: 2.375em !important;
+  right: 0.5em !important;
+  top: 2.375em !important;
+  transform: rotate(-45deg) !important;
+  animation: swal-success-line-long 0.75s ease-out !important;
+}
+
+@keyframes swal-success-icon-pulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes swal-success-line-tip {
+  0% {
+    width: 0;
+    left: 0.0625em;
+    top: 1.1875em;
+  }
+  54% {
+    width: 0;
+    left: 0.0625em;
+    top: 1.1875em;
+  }
+  70% {
+    width: 3.125em;
+    left: -0.5em;
+    top: 3.3125em;
+  }
+  84% {
+    width: 1.0625em;
+    left: 1.3125em;
+    top: 3.0625em;
+  }
+  100% {
+    width: 1.25em;
+    left: 0.875em;
+    top: 2.875em;
+  }
+}
+
+@keyframes swal-success-line-long {
+  0% {
+    width: 0;
+    right: 2.875em;
+    top: 3.375em;
+  }
+  65% {
+    width: 0;
+    right: 2.875em;
+    top: 3.375em;
+  }
+  84% {
+    width: 3.4375em;
+    right: 0;
+    top: 2.1875em;
+  }
+  100% {
+    width: 2.375em;
+    right: 0.5em;
+    top: 2.375em;
+  }
+}
+
+.swal-modern-title {
+  font-size: 20px !important;
+  font-weight: 800 !important;
+  color: #0f172a !important;
+}
+
+.swal-modern-html,
+.swal2-html-container {
+  color: #334155 !important;
+  font-size: 15.5px !important;
+}
+
+/* Toast title */
+.swal-stick-toast-title {
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 15px !important;
+  font-weight: 500 !important;
+  line-height: 1.5 !important;
+  color: #1e293b !important;
+  text-align: left !important;
+  white-space: normal !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  display: -webkit-box !important;
+  -webkit-line-clamp: 4 !important;
+  -webkit-box-orient: vertical !important;
+  flex: 1 1 auto !important;
+}
+
+.swal-stick-toast-progress {
+  border-radius: 999px !important;
+}
+
+/* ── Line timer on every SweetAlert (toast + modal) ────────────────
+   Shrinks right-to-left while the alert's timer runs, showing how long
+   is left before it auto-dismisses. Covers logout/login toasts,
+   confirm/prompt modals and centered card notifications. */
+.swal2-popup .swal2-timer-progress-bar {
+  height: 4px !important;
+  border-radius: 999px !important;
+  background: linear-gradient(90deg, #2563eb 0%, #22c55e 100%) !important;
+  opacity: 1 !important;
+  z-index: 3 !important;
+}
+
+.swal-modern-confirm,
+.swal-modern-cancel {
+  border-radius: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em;
+  font-size: 14.5px !important;
+  padding: 0.75rem 1.6rem !important;
+}
+
+@keyframes swalPopIn {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.93);
+    filter: blur(1px);
+  }
+
+  65% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1.01);
+    filter: blur(0);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes swalPopOut {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+}
+
+@keyframes swalToastIn {
+  0% {
+    opacity: 0;
+    transform: translateX(18px) translateY(-6px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateX(0) translateY(0);
+  }
+}
+
+@keyframes swalToastOut {
+  0% {
+    opacity: 1;
+    transform: translateX(0) translateY(0);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(14px) translateY(-4px);
+  }
+}
+
+
+.swal-modern-in {
+  animation: swalPopIn var(--motion-modal) var(--ease-out) both !important;
+}
+
+.swal-modern-out {
+  animation: swalPopOut var(--motion-fast) var(--ease-out) both !important;
+}
+
+.swal-modern-toast-in {
+  animation: swalToastIn var(--motion-slow) var(--ease-out) both !important;
+}
+
+.swal-modern-toast-out {
+  animation: swalToastOut var(--motion-fast) var(--ease-out) both !important;
+}
+
+/* Intruder alert (forgot-password) */
+.intruder-popup {
+  border: 1px solid rgba(15, 23, 42, 0.08) !important;
+  box-shadow:
+    0 0 0 6px rgba(220, 38, 38, 0.2),
+    0 28px 90px rgba(127, 29, 29, 0.6) !important;
+}
+
+.intruder-title {
+  color: #7f1d1d !important;
+  font-size: 14px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.16em !important;
+  text-transform: uppercase !important;
+  text-shadow: 0 0 20px rgba(220, 38, 38, 0.34);
+}
+
+.intruder-icon {
+  transform: scale(1.32);
+  filter: drop-shadow(0 0 10px rgba(220, 38, 38, 0.45));
+}
+
+@keyframes intruderPulseIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.45);
+  }
+
+  65% {
+    opacity: 1;
+    transform: scale(1.02);
+    box-shadow: 0 0 0 12px rgba(220, 38, 38, 0.12);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(220, 38, 38, 0.2);
+  }
+}
+
+@keyframes intruderFadeOut {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+.intruder-show {
+  animation: intruderPulseIn 360ms var(--ease-out) both !important;
+}
+
+.intruder-hide {
+  animation: intruderFadeOut var(--motion-fast) var(--ease-out) both !important;
+}
+
+/* Hover effects disabled system-wide. SweetAlert's timer line is exempted so
+   its width transition (the alert countdown) can still animate. */
+*:not(.swal2-timer-progress-bar) {
+  transition-property: none !important;
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+  scroll-behavior: auto !important;
+}
+
+*::before,
+*::after {
+  transition-property: none !important;
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+}
+
+button,
+[class*="navItem"],
+[class*="menuBtn"],
+[class*="dropdownItem"],
+[class*="dropItem"],
+[class*="tab"],
+[class*="primaryButton"],
+[class*="secondaryButton"],
+[class*="ghostButton"],
+[class*="dangerButton"],
+[class*="modalPrimary"],
+[class*="calendarButton"],
+[class*="holidayPill"],
+[class*="actionBtn"],
+[class*="actionInlineBtn"],
+[class*="bulkBtn"],
+[class*="archiveStorageBtn"],
+[class*="badgeButton"],
+[class*="statusButton"],
+[class*="commentActionButton"],
+[class*="lockdownAction"],
+[class*="lockdownEditAction"],
+[class*="lockdownNowButton"],
+[class*="lockdownCancelButton"],
+[class*="Card"],
+[class*="card"],
+[class*="Panel"],
+[class*="panel"],
+[class*="dropzone"] {
+  transform: none !important;
+  filter: none !important;
+}
+
+button::after,
+[class*="navItem"]::after,
+[class*="menuBtn"]::after,
+[class*="dropdownItem"]::after,
+[class*="dropItem"]::after,
+[class*="tab"]::after,
+[class*="primaryButton"]::after,
+[class*="secondaryButton"]::after,
+[class*="ghostButton"]::after,
+[class*="dangerButton"]::after,
+[class*="modalPrimary"]::after,
+[class*="calendarButton"]::after,
+[class*="holidayPill"]::after,
+[class*="actionBtn"]::after,
+[class*="actionInlineBtn"]::after,
+[class*="bulkBtn"]::after,
+[class*="archiveStorageBtn"]::after,
+[class*="badgeButton"]::after,
+[class*="statusButton"]::after,
+[class*="commentActionButton"]::after,
+[class*="lockdownAction"]::after,
+[class*="lockdownEditAction"]::after,
+[class*="lockdownNowButton"]::after,
+[class*="lockdownCancelButton"]::after {
+  display: none !important;
+}
+
+/* ─── SIDEBAR + SECTION DROPDOWNS: 250ms fade in/out ─── */
+/* IMPORTANT: this block MUST come AFTER the `* { transition: none !important }`
+   kill-switch above. Equal specificity + later order + !important wins, so only
+   the sidebar animates while everything else stays instant. */
+.sidebar,
+div.sidebar[class*="sidebar"],
+aside.sidebar[class*="sidebar"],
+nav.sidebar[class*="sidebar"] {
+  transition-property: width, margin-left, transform, opacity, box-shadow, border-radius !important;
+  transition-duration: 250ms !important;
+  transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1) !important;
+  transition-delay: 0ms !important;
+}
+
+/* Section dropdown containers (expand/collapse fade). */
+.sidebar [class*="sectionItems"],
+div.sidebar [class*="sectionItems"] {
+  transition-property: max-height, opacity !important;
+  transition-duration: 250ms !important;
+  transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1) !important;
+  transition-delay: 0ms !important;
+}
+
+/* Section dropdown rows (fade + slide). */
+.sidebar [class*="sectionButton"],
+.sidebar [class*="sectionHeader"],
+div.sidebar [class*="sectionButton"],
+div.sidebar [class*="sectionHeader"] {
+  transition-property: opacity, transform, background-color !important;
+  transition-duration: 250ms !important;
+  transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1) !important;
+  transition-delay: 0ms !important;
+}
+
+/* Chevron rotation in section headers. */
+.sidebar [class*="sectionHeader"] span,
+.sidebar [class*="sectionHeader"] svg,
+div.sidebar [class*="sectionHeader"] span,
+div.sidebar [class*="sectionHeader"] svg {
+  transition-property: transform !important;
+  transition-duration: 250ms !important;
+  transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1) !important;
+  transition-delay: 0ms !important;
+}
+
+
+
+/* ─── COMPACT LAYOUT OVERRIDES ─── */
+/* Force all buttons to compact size so list rows fit on one line */
+button {
+  padding-block: 6px !important;
+  padding-inline: 12px !important;
+  font-size: 12px !important;
+  line-height: 1.35 !important;
+  min-height: 32px !important;
+  min-width: 32px !important;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+/* The pagination submit label must not wrap into a narrow icon-sized button. */
+.pagination-go-button.pagination-go-button {
+  width: auto !important;
+  min-width: 46px !important;
+  white-space: nowrap !important;
+  overflow-wrap: normal !important;
+  flex: 0 0 auto !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+/* Override common inline padding patterns that are larger */
+button[style*="padding: 10px"],
+button[style*="padding:10px"],
+button[style*="padding: 12px"],
+button[style*="padding:12px"],
+button[style*="padding: 14px"],
+button[style*="padding:14px"] {
+  padding: 6px 12px !important;
+}
+/* Compact icon-only buttons (30-36px → 26-28px) */
+button[style*="width: 3"],
+button[style*="height: 3"] {
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  min-height: 28px !important;
+  padding: 0 !important;
+}
+/* Compact toolbars / action bars */
+div[style*="display: flex"][style*="gap"]:where(
+  [style*="padding: 10px"],
+  [style*="padding:10px"],
+  [style*="padding: 12px"],
+  [style*="padding:12px"],
+  [style*="padding: 15px"],
+  [style*="padding:15px"]
+) {
+  padding: 6px 10px !important;
+  gap: 6px !important;
+}
+/* Tighter table cells */
+td, th {
+  padding-block: 4px !important;
+  padding-inline: 6px !important;
+  font-size: 12px !important;
+}
+/* Compact filter/search bars */
+input, select, textarea {
+  font-size: 12px !important;
+  padding-block: 4px !important;
+  padding-inline: 8px !important;
+}
+
+/* ─── SYSTEM-WIDE SEARCH BAR (all roles / pages) ─── */
+/* Keep every list/filter search field as a single-line control. */
+input[type="search"],
+input[id^="search-"],
+input[id*="search"],
+input[name*="search" i],
+input[placeholder*="Search" i],
+input[placeholder*="search" i],
+input.app-search-input,
+.searchInput,
+.pageInlineFilters input[type="text"],
+.pageInlineFilters input[type="search"],
+.page-filter-inline input[type="text"],
+.page-filter-inline input[type="search"] {
+  height: 34px !important;
+  min-height: 34px !important;
+  max-height: 34px !important;
+  line-height: 34px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+  box-sizing: border-box !important;
+  display: block !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  align-self: center !important;
+  resize: none !important;
+  field-sizing: fixed !important;
+  border-radius: 8px !important;
+  border: 1px solid #cbd5e1 !important;
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  font-size: 12px !important;
+}
+
+/* Toolbar/filter row search: slightly larger fixed width, never overlap buttons */
+.pageInlineFilters input[type="text"],
+.pageInlineFilters input[type="search"],
+.page-filter-inline input[type="text"],
+.page-filter-inline input[type="search"],
+#search-clients,
+#search-users,
+input.app-search-input {
+  width: 300px !important;
+  max-width: min(300px, 100%) !important;
+  min-width: 220px !important;
+  flex: 0 0 auto !important;
+}
+
+/* Full-width search fields inside filter cards/grids stay full width but fixed height */
+label input[type="search"],
+label input[id^="search-"],
+label input[placeholder*="Search" i],
+label input[placeholder*="search" i] {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Labels wrapping search inputs should not stretch the control vertically */
+.pageInlineFilters label:has(input[type="text"]),
+.pageInlineFilters label:has(input[type="search"]),
+.page-filter-inline label:has(input[type="text"]),
+.page-filter-inline label:has(input[type="search"]),
+label:has(input[placeholder*="Search" i]),
+label:has(input[placeholder*="search" i]),
+label:has(input[type="search"]),
+label:has(input[id^="search-"]) {
+  height: auto !important;
+  max-height: none !important;
+  align-self: flex-end !important;
+  justify-content: flex-end !important;
+}
+
+/* Explicit clients/users search ids */
+#search-clients,
+#search-users {
+  width: 300px !important;
+  max-width: min(300px, 100%) !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  max-height: 34px !important;
+}
+
+/* Payroll/module search inputs with leading icon keep left padding */
+input.searchInput,
+.searchInput {
+  padding-left: 38px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+
+
+/* Compact badges, labels, pills */
+span[style*="border-radius"][style*="padding"]:where(
+  [style*="padding: 4px"],
+  [style*="padding:4px"],
+  [style*="padding: 6px"],
+  [style*="padding:6px"],
+  [style*="padding: 8px"],
+  [style*="padding:8px"],
+  [style*="padding: 10px"],
+  [style*="padding:10px"]
+) {
+  padding: 2px 6px !important;
+  font-size: 11px !important;
+}
+
+/* ─── PAGE HEADER + INLINE FILTER SYSTEM ─── */
+.pageHeaderInline,
+.page-toolbar-inline {
+  display: flex !important;
+  align-items: flex-end !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  flex-wrap: wrap !important;
+  margin-bottom: 8px !important;
+}
+
+.pageHeaderText,
+.page-title-group {
+  flex: 1 1 220px !important;
+  min-width: 180px !important;
+}
+
+.pageInlineFilters,
+.page-filter-inline {
+  flex: 0 1 auto !important;
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 8px !important;
+  flex-wrap: nowrap !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.pageInlineFilters > *,
+.page-filter-inline > * {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  flex: 0 0 auto !important;
+}
+
+.pageInlineFilters input,
+.pageInlineFilters select,
+.page-filter-inline input,
+.page-filter-inline select {
+  width: auto !important;
+  min-width: 132px !important;
+  max-width: 300px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+  flex: 0 0 auto !important;
+  align-self: center !important;
+}
+
+.pageInlineFilters input[type="text"],
+.pageInlineFilters input[type="search"],
+.page-filter-inline input[type="text"],
+.page-filter-inline input[type="search"] {
+  width: 300px !important;
+  min-width: 220px !important;
+  max-width: min(300px, 100%) !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
+  flex: 0 0 auto !important;
+}
+
+.pageInlineFilters select,
+.page-filter-inline select {
+  max-width: 200px !important;
+}
+
+.pageInlineFilters label,
+.page-filter-inline label {
+  margin: 0 !important;
+  display: inline-flex !important;
+  flex-direction: column !important;
+  justify-content: flex-end !important;
+  gap: 3px !important;
+  white-space: nowrap !important;
+  max-width: 320px !important;
+  min-width: 0 !important;
+  flex: 0 0 auto !important;
+  align-self: flex-end !important;
+  height: auto !important;
+}
+
+.pageInlineFilters label > span,
+.page-filter-inline label > span {
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  line-height: 1.1 !important;
+}
+
+.pageInlineFilters button:not(.notification-card),
+.page-filter-inline button:not(.notification-card),
+.app-action-btn,
+button[class*="primaryButton"],
+button[class*="secondaryButton"],
+button[class*="ghostButton"],
+button[class*="btnPrimary"],
+button[class*="btnSecondary"] {
+  min-height: 32px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  padding: 7px 10px !important;
+  border-radius: 6px !important;
+  border: 1px solid rgba(148, 163, 184, 0.36) !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
+  color: #334155 !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+}
+
+button:not([style*="width: 28"]):not([style*="width: 38"]):not([style*="width:28"]):not([style*="width:38"]) {
+  min-height: 32px;
+}
+
+.app-action-btn,
+.page-primary-action-btn,
+button[style*="display: flex"],
+button[style*="display:flex"],
+button[style*="inline-flex"] {
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+/* ─── NOTIFICATION CARD BUTTONS ─── */
+/* Reset aggressive global button styles on notification cards */
+button.notification-card,
+button.notification-card:hover,
+button.notification-card:active,
+button.notification-card:focus {
+  display: block !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  text-align: left !important;
+  cursor: pointer !important;
+  padding: 7px 10px !important;
+  border-radius: 8px !important;
+  font-family: inherit !important;
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+  min-height: unset !important;
+  min-width: unset !important;
+  max-width: 100% !important;
+  height: auto !important;
+  gap: 0 !important;
+  justify-content: flex-start !important;
+  align-items: stretch !important;
+  vertical-align: top !important;
+  white-space: normal !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  filter: none !important;
+  transform: none !important;
+  color: inherit !important;
+  /* Read state (default) */
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: none !important;
+  opacity: 0.92 !important;
+}
+
+/* Unread notification card */
+button.notification-card[data-unread="true"],
+button.notification-card[data-unread="true"]:hover,
+button.notification-card[data-unread="true"]:active,
+button.notification-card[data-unread="true"]:focus {
+  background: linear-gradient(180deg, #ffffff 0%, #eff6ff 100%) !important;
+  border: 1px solid #bfdbfe !important;
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.1) !important;
+  opacity: 1 !important;
+}
+
+button.notification-card:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.3) !important;
+  outline-offset: 2px !important;
+}
+
+
+.app-action-btn-primary {
+  border-color: rgba(37, 99, 235, 0.22) !important;
+  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.20) !important;
+  padding: 7px 12px !important;
+  min-width: fit-content !important;
+  white-space: nowrap !important;
+  font-weight: 700 !important;
+}
+
+button[class*="primaryButton"],
+button[class*="btnPrimary"] {
+  border-color: rgba(37, 99, 235, 0.22) !important;
+  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.20) !important;
+  padding: 7px 12px !important;
+  min-width: fit-content !important;
+  white-space: nowrap !important;
+  font-weight: 700 !important;
+}
+
+.app-action-btn-danger {
+  border-color: rgba(239, 68, 68, 0.28) !important;
+  background: #fef2f2 !important;
+  color: #b91c1c !important;
+}
+
+.app-action-btn-success {
+  border-color: rgba(34, 197, 94, 0.26) !important;
+  background: #f0fdf4 !important;
+  color: #166534 !important;
+}
+
+@media (max-width: 720px) {
+  .pageHeaderInline,
+  .page-toolbar-inline {
+    align-items: stretch !important;
+  }
+  .pageInlineFilters,
+  .page-filter-inline {
+    width: 100% !important;
+    justify-content: flex-start !important;
+    flex-wrap: wrap !important;
+  }
+  .pageInlineFilters input,
+  .pageInlineFilters select,
+  .page-filter-inline input,
+  .page-filter-inline select {
+    flex: 1 1 160px !important;
+    max-width: none !important;
+  }
+}
+/* ─── ACTION BUTTON SYSTEM ─── */
+button:has(.crud-action-icon),
+button[aria-label*="View"],
+button[aria-label*="Edit"],
+button[aria-label*="Archive"],
+button[aria-label*="Restore"],
+button[aria-label*="Delete"],
+button[title*="View"],
+button[title*="Edit"],
+button[title*="Archive"],
+button[title*="Restore"],
+button[title*="Delete"] {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  width: auto !important;
+  max-width: 100% !important;
+  min-height: 32px !important;
+  white-space: nowrap !important;
+  border-radius: 6px !important;
+  border: 1px solid rgba(148, 163, 184, 0.38) !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
+  color: #475569 !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06) !important;
+}
+
+button:has(.crud-action-icon[data-crud-action="create"]),
+button:has(.crud-action-icon[data-crud-action="save"]),
+button:has(.crud-action-icon[data-crud-action="approve"]) {
+  border-color: rgba(37, 99, 235, 0.22) !important;
+  background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.18) !important;
+}
+
+/* ─── BLUE CARD STYLING FOR ADD/CREATE/SAVE/UPDATE BUTTONS ─── */
+/* Target action buttons by accessible labels, titles, and shared CRUD icons. */
+button:not(:disabled):not(.notification-card):not([class*="notificationItem"]):not([class*="notificationCenterItem"]):is(
+  [aria-label*="Add"],
+  [aria-label*="Create"],
+  [aria-label*="Save"],
+  [aria-label*="Update"],
+  [aria-label*="Submit"],
+  [aria-label*="Send"],
+  [aria-label*="Resend"],
+  [aria-label*="Upload"],
+  [aria-label*="Download"],
+  [aria-label*="download"],
+  [aria-label*="add"],
+  [aria-label*="create"],
+  [aria-label*="save"],
+  [aria-label*="update"],
+  [aria-label*="submit"],
+  [aria-label*="send"],
+  [aria-label*="resend"],
+  [aria-label*="upload"],
+  [title*="Add"],
+  [title*="Create"],
+  [title*="Save"],
+  [title*="Update"],
+  [title*="Submit"],
+  [title*="Send"],
+  [title*="Resend"],
+  [title*="Upload"],
+  [title*="Download"],
+  [title*="download"],
+  [title*="add"],
+  [title*="create"],
+  [title*="save"],
+  [title*="update"],
+  [title*="submit"],
+  [title*="send"],
+  [title*="resend"],
+  [title*="upload"]
+):not([aria-label*="Archive"]):not([title*="Archive"]):not([aria-label*="Remove"]):not([title*="Remove"]),
+button:not(:disabled):has(.crud-action-icon[data-crud-action="create"]),
+button:not(:disabled):has(.crud-action-icon[data-crud-action="save"]),
+button:not(:disabled):has(.crud-action-icon[data-crud-action="update"]),
+button:not(:disabled):has(span:is([class*="Add"], [class*="Create"], [class*="Save"], [class*="Update"])) {
+  border-color: rgba(37, 99, 235, 0.22) !important;
+  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.20) !important;
+  padding: 8px 16px !important;
+  min-width: fit-content !important;
+  white-space: nowrap !important;
+  font-weight: 700 !important;
+}
+
+/* Enhanced hover state for Add/Create/Save buttons */
+
+
+button:has(.crud-action-icon[data-crud-action="view"]) {
+  color: #0369a1 !important;
+  border-color: rgba(14, 165, 233, 0.22) !important;
+  background: #f0f9ff !important;
+}
+
+button:has(.crud-action-icon[data-crud-action="edit"]) {
+  color: #1d4ed8 !important;
+  border-color: rgba(59, 130, 246, 0.24) !important;
+  background: #eff6ff !important;
+}
+
+button:not(:disabled):has(.crud-action-icon[data-crud-action="update"]),
+button:not(:disabled):has(.crud-action-icon[data-crud-action="save"]),
+button:not(:disabled):has(.crud-action-icon[data-crud-action="create"]) {
+  color: #ffffff !important;
+  border-color: rgba(37, 99, 235, 0.22) !important;
+  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%) !important;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.20) !important;
+}
+
+button:has(.crud-action-icon[data-crud-action="archive"]) {
+  color: #92400e !important;
+  border-color: rgba(245, 158, 11, 0.28) !important;
+  background: #fffbeb !important;
+}
+
+button:has(.crud-action-icon[data-crud-action="restore"]) {
+  color: #166534 !important;
+  border-color: rgba(34, 197, 94, 0.24) !important;
+  background: #f0fdf4 !important;
+}
+
+button:has(.crud-action-icon[data-crud-action="delete"]),
+button:has(.crud-action-icon[data-crud-action="cancel"]) {
+  color: #b91c1c !important;
+  border-color: rgba(239, 68, 68, 0.24) !important;
+  background: #fef2f2 !important;
+}
+
+
+
+/* ─── ICON-ONLY ACTION BUTTONS ─── */
+/* Normalize inline-styled action icon buttons while keeping semantic color chips */
+/* NOTE: [data-search-clear] is excluded — the search-bar X must stay a 20px
+   circle pinned inside the input (see app-dropdown.css .llb-search-clear). */
+button[style*="display: inline-flex"][style*="border-radius:"][style*="width:"]:not([data-dark-btn]):not([data-search-clear]),
+button[style*="display:inline-flex"][style*="border-radius:"][style*="width:"]:not([data-dark-btn]):not([data-search-clear]),
+button[style*="display: inline-flex"][style*="border-radius:"][style*="padding: 0"]:not([data-dark-btn]):not([data-search-clear]),
+button[style*="display:inline-flex"][style*="border-radius:"][style*="padding: 0"]:not([data-dark-btn]):not([data-search-clear]) {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
+  border: 1px solid rgba(148, 163, 184, 0.35) !important;
+  padding: 6px 10px !important;
+  width: auto !important;
+  height: auto !important;
+  min-width: 32px !important;
+  min-height: 32px !important;
+  border-radius: 6px !important;
+}
+
+/* Payroll CSS module action buttons */
+.actionInlineBtn,
+.actionInlineSuccess,
+.actionInlineDanger {
+  background: #f8fafc !important;
+  border: 1px solid rgba(148, 163, 184, 0.35) !important;
+  padding: 6px 10px !important;
+  width: auto !important;
+  height: auto !important;
+  border-radius: 6px !important;
+  min-width: 32px !important;
+  min-height: 32px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
+}
+.actionInlineSuccess {
+  color: #15803d !important;
+}
+.actionInlineDanger {
+  color: #b91c1c !important;
+}
+/* Dropdown action menu items — reduce padding to be compact */
+button[style*="display: block"][style*="width: 100%"],
+button[style*="display:block"][style*="width:100%"] {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 8px 10px !important;
+  font-size: 12px !important;
+  line-height: 1.25 !important;
+  white-space: nowrap !important;
+}
+/* Restore buttons in archive views (green pill buttons) */
+button[style*="background: #16a34a"][style*="color: white"],
+button[style*="background:#16a34a"][style*="color:white"] {
+  background: #f0fdf4 !important;
+  border: 1px solid rgba(34, 197, 94, 0.24) !important;
+  padding: 6px 12px !important;
+  width: auto !important;
+  height: auto !important;
+  min-width: 32px !important;
+  min-height: 32px !important;
+  border-radius: 999px !important;
+  color: #166534 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+}
+
+
+/* Compact page title areas */
+h1, h2, h3 {
+  margin-block: 4px !important;
+}
+h1 { font-size: 16px !important; }
+h2 { font-size: 15px !important; }
+h3 { font-size: 13px !important; }
+
+/* ─── ADDITIONAL BLUE STYLING FOR TEXT-BASED ADD/CREATE/SAVE BUTTONS ─── */
+/* Target buttons by checking text content patterns via adjacent text or common naming */
+button[onclick*="Add"]:not([onclick*="Archive"]),
+button[onclick*="Create"]:not([onclick*="Archive"]),
+button[onclick*="Save"]:not([onclick*="Archive"]),
+button[onclick*="openAdd"],
+button[onclick*="openCreate"],
+button[onclick*="handleAdd"],
+button[onclick*="handleCreate"],
+button[onclick*="handleSave"],
+button[onclick*="submitForm"],
+button[onclick*="saveChanges"] {
+  border-color: rgba(37, 99, 235, 0.22) !important;
+  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.20) !important;
+  padding: 7px 12px !important;
+  min-width: fit-content !important;
+  white-space: nowrap !important;
+  font-weight: 700 !important;
+}
+
+/* Specific override for app-action-btn-primary class to ensure blue card styling */
+.app-action-btn-primary,
+button[class*="primaryButton"],
+button[class*="btnPrimary"],
+button[type="submit"]:not(:disabled):not([class*="danger"]):not([class*="secondary"]):not([class*="ghost"]) {
+  border-color: rgba(37, 99, 235, 0.22) !important;
+  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.20) !important;
+  padding: 8px 16px !important;
+  min-width: fit-content !important;
+  white-space: nowrap !important;
+  font-weight: 700 !important;
+}
+
+/* Larger primary action buttons under page titles (Leave / Overtime) */
+.page-primary-action-btn.app-action-btn-primary,
+button.page-primary-action-btn {
+  height: 34px !important;
+  min-height: 34px !important;
+  min-width: 0 !important;
+  padding: 0 14px !important;
+  font-size: 12px !important;
+  border-radius: 8px !important;
+  border-color: rgba(37, 99, 235, 0.22) !important;
+  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.20) !important;
+  white-space: nowrap !important;
+  font-weight: 700 !important;
+}
+
+/* Normalize oversized/long buttons across the app. Keep commands compact and
+   let rows wrap instead of letting buttons stretch over cards. */
+button:not(.notification-card) {
+  width: auto !important;
+  max-width: min(220px, 100%) !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 30px !important;
+  max-height: none !important;
+  padding: 6px 10px !important;
+  line-height: 1.25 !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  text-align: center !important;
+  flex: 0 0 auto !important;
+}
+
+button[style*="width: 100%"]:not(.notification-card):not([style*="text-align: left"]),
+button[style*="width:100%"]:not(.notification-card):not([style*="text-align:left"]),
+button[style*="flex: 1"]:not(.notification-card),
+button[style*="flex:1"]:not(.notification-card),
+button[style*="flex: 1 1"]:not(.notification-card),
+button[style*="flex:1 1"]:not(.notification-card) {
+  width: auto !important;
+  flex: 0 0 auto !important;
+}
+
+.app-action-btn,
+.app-action-btn-primary,
+.page-primary-action-btn,
+button[class*="primaryButton"],
+button[class*="secondaryButton"],
+button[class*="ghostButton"],
+button[class*="btnPrimary"],
+button[class*="btnSecondary"],
+button[type="submit"]:not(:disabled):not([class*="danger"]):not([class*="secondary"]):not([class*="ghost"]) {
+  max-width: min(220px, 100%) !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 30px !important;
+  padding: 6px 10px !important;
+  font-size: 12px !important;
+  white-space: normal !important;
+}
+
+.page-primary-action-btn.app-action-btn-primary,
+button.page-primary-action-btn {
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 34px !important;
+  padding: 8px 14px !important;
+  font-size: 12px !important;
+}
+
+button:has(.crud-action-icon),
+button[aria-label*="View"],
+button[aria-label*="Edit"],
+button[aria-label*="Archive"],
+button[aria-label*="Restore"],
+button[aria-label*="Delete"],
+button[title*="View"],
+button[title*="Edit"],
+button[title*="Archive"],
+button[title*="Restore"],
+button[title*="Delete"] {
+  max-width: 160px !important;
+  padding: 6px 10px !important;
+  white-space: nowrap !important;
+}
+
+button:has(.crud-action-icon):empty,
+button[style*="width: 28"],
+button[style*="width:28"],
+button[style*="height: 28"],
+button[style*="height:28"],
+button[style*="width: 30"],
+button[style*="width:30"],
+button[style*="height: 30"],
+button[style*="height:30"],
+button[style*="width: 32"],
+button[style*="width:32"],
+button[style*="height: 32"],
+button[style*="height:32"] {
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  min-height: 32px !important;
+  max-width: 32px !important;
+  padding: 0 !important;
+  flex: 0 0 32px !important;
+}
+
+button[style*="display: block"][style*="width: 100%"],
+button[style*="display:block"][style*="width:100%"],
+button[style*="text-align: left"],
+button[style*="text-align:left"] {
+  width: 100% !important;
+  max-width: 100% !important;
+  justify-content: flex-start !important;
+  text-align: left !important;
+  flex: 1 1 auto !important;
+}
+
+div[style*="display: flex"][style*="gap"]:has(> button),
+div[style*="display:flex"][style*="gap"]:has(> button) {
+  flex-wrap: wrap !important;
+  align-items: center !important;
+}
+
+form > div[style*="display: flex"][style*="gap"]:has(> button),
+div[style*="justify-content: flex-end"][style*="gap"]:has(> button),
+div[style*="justifyContent: flex-end"][style*="gap"]:has(> button) {
+  justify-content: flex-end !important;
+}
+
+/* Enhanced hover for primary action buttons */
+
+/* ─── UNIVERSAL FONT FAMILY ─── */
+/* Apply the interface typeface consistently across every system screen. */
+html,
+body,
+#__next,
+*:not(code):not(pre):not(kbd):not(samp) {
+  font-family: var(--font-ui) !important;
+}
+
+code,
+pre,
+kbd,
+samp,
+[data-monospace="true"] {
+  font-family: var(--font-mono) !important;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+}
+
+/* Unified notification cards and softer field focus */
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.16) !important;
+  outline: none !important;
+}
+
+button.notification-card {
+  border-color: #e5e7eb !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06) !important;
+}
+
+button.notification-card[data-unread="true"] {
+  border-color: #bfdbfe !important;
+  background: #eff6ff !important;
+  color: #1e3a5f !important;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.08) !important;
+}
+
+button.notification-card[data-unread="true"] strong,
+button.notification-card[data-unread="true"] div,
+button.notification-card[data-unread="true"] span {
+  color: #1e3a5f !important;
+}
+
+button.notification-card[data-unread="true"] span {
+  border-color: #bfdbfe !important;
+}
+
+button.notification-card:focus-visible {
+  outline: none !important;
+  border-color: rgba(59, 130, 246, 0.62) !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.16) !important;
+}
+
+button[title="Create Client"],
+button[title="Update Client"],
+button[aria-label="Create Client"],
+button[aria-label="Update Client"] {
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: #be123c !important;
+  box-shadow: none !important;
+}
+
+button[title="Create Client"]:disabled,
+button[title="Update Client"]:disabled,
+button[aria-label="Create Client"]:disabled,
+button[aria-label="Update Client"]:disabled {
+  color: #94a3b8 !important;
+}
+
+button[class*="notificationItem"],
+button[class*="notificationCenterItem"] {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+  text-align: left !important;
+  justify-content: flex-start !important;
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+  color: #0f172a !important;
+}
+
+button[class*="notificationItem"]:focus,
+button[class*="notificationItem"]:active,
+button[class*="notificationCenterItem"]:focus,
+button[class*="notificationCenterItem"]:active {
+  border-color: #bfdbfe !important;
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14) !important;
+}
+
+button[class*="notificationItem"] {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: flex-start !important;
+  gap: 10px !important;
+  text-align: left !important;
+  white-space: normal !important;
+  padding: 10px 12px !important;
+  border-radius: 10px !important;
+  background: #ffffff !important;
+  background-image: none !important;
+  color: #0f172a !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05) !important;
+  flex: 0 0 auto !important;
+}
+
+button[class*="notificationItem"][class*="notificationItemUnread"] {
+  border-color: rgba(59, 130, 246, 0.36) !important;
+  background: #eff6ff !important;
+  background-image: none !important;
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.12) !important;
+}
+
+button[class*="notificationItem"]:focus,
+button[class*="notificationItem"]:focus-visible,
+button[class*="notificationItem"]:active {
+  border-color: rgba(59, 130, 246, 0.45) !important;
+  outline: none !important;
+  background: #eff6ff !important;
+  background-image: none !important;
+  color: #0f172a !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14) !important;
+}
+
+button[class*="notificationCenterItem"] {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  text-align: left !important;
+  background: #ffffff !important;
+  background-image: none !important;
+  color: #0f172a !important;
+}
+
+button[class*="notificationCenterItem"][class*="notificationCenterItemUnread"] {
+  background: #eff6ff !important;
+  background-image: none !important;
+  border-color: rgba(59, 130, 246, 0.4) !important;
+}
+
+button[class*="notificationCenterItem"],
+button[class*="notificationCenterItem"]:hover,
+button[class*="notificationCenterItem"]:focus,
+button[class*="notificationCenterItem"]:focus-visible,
+button[class*="notificationCenterItem"]:active {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 44px !important;
+  padding: 9px 12px !important;
+  border-radius: 10px !important;
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+  color: #0f172a !important;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05) !important;
+  overflow: hidden !important;
+}
+
+button[class*="notificationCenterItem"][class*="notificationCenterItemUnread"],
+button[class*="notificationCenterItem"][class*="notificationCenterItemUnread"]:hover,
+button[class*="notificationCenterItem"][class*="notificationCenterItemUnread"]:focus,
+button[class*="notificationCenterItem"][class*="notificationCenterItemUnread"]:focus-visible,
+button[class*="notificationCenterItem"][class*="notificationCenterItemUnread"]:active {
+  border-color: #bfdbfe !important;
+  background: #eff6ff !important;
+  background-color: #eff6ff !important;
+  background-image: none !important;
+}
+
+.myTasksFilters input,
+.myTasksFilters select,
+.myTasksFilters button {
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
+  box-sizing: border-box !important;
+}
+
+.myTasksFilters button {
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  white-space: nowrap !important;
+  padding: 0 10px !important;
+}
+
+@media (max-width: 980px) {
+  .myTasksFilters {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .myTasksFilters {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ─── SYSTEM-WIDE CARD SURFACE ───
+ * Off-white card faces with a visible edge + soft shadow so white cards
+ * are distinguishable from the page background everywhere.
+ */
+div[style*="background: white"]:not(button),
+div[style*="background: #fff"]:not(button),
+div[style*="background: #ffffff"]:not(button),
+div[style*="background-color: white"]:not(button),
+div[style*="background-color: #fff"]:not(button),
+div[style*="background-color: #ffffff"]:not(button),
+div[style*="background: rgb(255, 255, 255)"]:not(button),
+div[style*="background-color: rgb(255, 255, 255)"]:not(button) {
+  background-color: var(--card-bg) !important;
+  box-shadow: var(--card-shadow) !important;
+}
+
+.glass-panel,
+.glass {
+  background-color: var(--card-bg) !important;
+  box-shadow: var(--card-shadow) !important;
+}
+
+/* Shadowless full-bleed containers: edge stays visible via the inset ring */
+div[style*="width: 100%"][style*="background-color: white"],
+div[style*="width: 100%"][style*="background: white"],
+div[style*="flex: 1"][style*="background-color: white"],
+div[style*="flex: 1"][style*="background: white"] {
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.04) !important;
+}
+
+/* Keep sticky filter/toolbar bars restrained */
+div[style*="position: sticky"][style*="background-color: white"] {
+  background-color: rgba(253, 253, 252, 0.96) !important;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.05) !important;
+}
+
+/* ── LLB data-table system ─────────────────────────────────────────
+   Opt-in via className="llb-table" on list tables. Implements the
+   six table rules: numbers right/tabular, no zebra (hairlines only),
+   hover-lit rows, sticky header (+ optional pinned first column),
+   truncated text with tooltip, dash for empty, actions on hover/focus,
+   density via data-density="compact|default|comfortable" (default 48). */
+table.llb-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+
+table.llb-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #f8fafc;
+  padding: 8px 10px !important;
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+table.llb-table tbody tr {
+  background: #ffffff;
+}
+
+table.llb-table tbody tr:nth-child(even) {
+  background: #ffffff;
+}
+
+table.llb-table tbody tr:hover {
+  background: #f1f8ff;
+}
+
+/* Unread tint that still respects row hover. */
+table.llb-table tbody tr.llb-unread > td {
+  background: #eff6ff;
+}
+
+table.llb-table tbody tr.llb-unread:hover > td {
+  background: #dbeafe;
+}
+
+table.llb-table tbody td {
+  padding: 8px 10px !important;
+  font-size: 12px;
+  line-height: 1.25;
+  border-bottom: 1px solid #eef2f7;
+  vertical-align: middle;
+}
+
+table.llb-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Numbers right, tabular, never truncated. */
+table.llb-table th.llb-num,
+table.llb-table td.llb-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Long text: one line, ellipsis, full text via title attribute. */
+table.llb-table td.llb-trunc {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Empty cells render a dash instead of 0 or blank. */
+table.llb-table td.llb-empty::after {
+  content: '–';
+  color: #94a3b8;
+}
+
+/* Pinned first column (opt-in via llb-pin-first): identity stays visible
+   on horizontal scroll. Solid backgrounds keep text from bleeding through. */
+table.llb-table.llb-pin-first thead th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  background: #f8fafc;
+  box-shadow: 1px 0 0 #e2e8f0;
+}
+
+table.llb-table.llb-pin-first tbody td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #ffffff;
+  box-shadow: 1px 0 0 #eef2f7;
+}
+
+table.llb-table.llb-pin-first tbody tr:hover td:first-child {
+  background: #f1f8ff;
+}
+
+/* Row actions: hidden until the row is hovered or keyboard-focused.
+   Touch devices (no hover) always show them. */
+table.llb-table td.llb-actions > * {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+table.llb-table tbody tr:hover td.llb-actions > *,
+table.llb-table tbody tr:focus-within td.llb-actions > * {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  table.llb-table td.llb-actions > * {
+    opacity: 1;
+  }
+}
+
+table.clients-list-table td.llb-actions > * {
+  opacity: 1 !important;
+}
+
+/* Stick-style list density: short rows with enough room for controls. */
+table.llb-table tbody td {
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+}
+
+table.llb-table[data-density="compact"] thead th,
+table.llb-table[data-density="compact"] tbody td {
+  padding: 6px 9px !important;
+}
+
+table.llb-table[data-density="comfortable"] thead th,
+table.llb-table[data-density="comfortable"] tbody td {
+  padding: 10px 12px !important;
+}
+
+/* ── LLB row utilities (div-based lists, same table rules) ─────────
+   .llb-ellipsis  — one line, ellipsis (pair with title={full text}).
+   .llb-tabular   — tabular figures so digits line up.
+   .llb-rowhover  — hover-lit row (keyboard focus included).
+   .llb-dash-empty — truly empty elements render a dash instead. */
+.llb-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.llb-tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.llb-rowhover {
+  transition: background 0.15s ease;
+}
+
+.llb-rowhover:hover {
+  background: #f1f8ff;
+}
+
+.llb-dash-empty:empty::after {
+  content: '–';
+  color: #94a3b8;
+}
+
+/* ── Global tooltip (300ms delay + pointing arrow) ─────────────────
+   Rendered by utils/globalTooltip.ts for every title tooltip. */
+.llb-tooltip {
+  position: fixed;
+  z-index: 300000;
+  max-width: min(280px, calc(100vw - 32px));
+  padding: 8px 12px;
+  border-radius: 9px;
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 12px 28px rgba(2, 6, 23, 0.35);
+  color: #f1f5f9;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.45;
+  text-align: center;
+  overflow-wrap: break-word;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease;
+}
+
+.llb-tooltip-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.llb-tooltip::after {
+  content: '';
+  position: absolute;
+  left: var(--arrow-left, 50%);
+  width: 10px;
+  height: 10px;
+  background: #0f172a;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.llb-tooltip[data-placement="top"]::after {
+  bottom: -6px;
+  border-right: 1px solid rgba(255, 255, 255, 0.14);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.llb-tooltip[data-placement="bottom"]::after {
+  top: -6px;
+  border-left: 1px solid rgba(255, 255, 255, 0.14);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .llb-tooltip {
+    transition: none;
+  }
+}
+
+/* ── Upload hover glow (document + payroll upload zones) ─────────────── */
+.upload-hover-glow {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+}
+
+.upload-hover-glow:hover {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.22), 0 0 22px rgba(59, 130, 246, 0.45);
+}
+
+.upload-hover-glow:focus-within {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.28), 0 0 26px rgba(37, 99, 235, 0.5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upload-hover-glow {
+    transition: none;
+  }
+}
+
+/* ── FIT-TO-CONTENT: cap oversized padding on cards (all roles / pages) ──
+ * Big cards, mini cards and sub-cards hug their text instead of looking fat.
+ * Targets light-surface divs with roomy inline padding (18px+). Overlay
+ * backdrops themselves are excluded; dialog panels tighten like cards do.
+ * Two-value shorthands starting with a roomy value (e.g. "28px 32px") match
+ * via the same substring and are normalized too. */
+div:not([style*="position: fixed"]):not([style*="position:fixed"]):where(
+  [style*="background: white"],
+  [style*="background:white"],
+  [style*="background: #fff"],
+  [style*="background:#fff"],
+  [style*="background: #ffffff"],
+  [style*="background:#ffffff"],
+  [style*="background-color: white"],
+  [style*="background-color:white"],
+  [style*="background-color: #fff"],
+  [style*="background-color:#fff"],
+  [style*="background-color: #ffffff"],
+  [style*="background-color:#ffffff"]
+):where(
+  [style*="padding: 28px"],
+  [style*="padding:28px"],
+  [style*="padding: 24px"],
+  [style*="padding:24px"],
+  [style*="padding: 22px"],
+  [style*="padding:22px"],
+  [style*="padding: 20px"],
+  [style*="padding:20px"]
+) {
+  padding: 12px 14px !important;
+}
+
+div:not([style*="position: fixed"]):not([style*="position:fixed"]):where(
+  [style*="background: white"],
+  [style*="background:white"],
+  [style*="background: #fff"],
+  [style*="background:#fff"],
+  [style*="background: #ffffff"],
+  [style*="background:#ffffff"],
+  [style*="background-color: white"],
+  [style*="background-color:white"],
+  [style*="background-color: #fff"],
+  [style*="background-color:#fff"],
+  [style*="background-color: #ffffff"],
+  [style*="background-color:#ffffff"]
+):where(
+  [style*="padding: 18px"],
+  [style*="padding:18px"]
+) {
+  padding: 10px 12px !important;
+}
+
+/* Clients list: keep controls inside the same short, single-line row. */
+.clients-list-shell {
+  height: fit-content !important;
+  min-height: 0 !important;
+  align-self: flex-start !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow: auto !important;
+  box-sizing: border-box;
+}
+
+table.clients-list-table {
+  height: auto !important;
+  min-height: 0 !important;
+  width: 100% !important;
+  min-width: 760px;
+  table-layout: fixed !important;
+  font-variant-numeric: tabular-nums;
+}
+
+table.clients-list-table thead,
+table.clients-list-table tbody {
+  height: auto !important;
+}
+
+table.clients-list-table[data-density="compact"] {
+  --clients-row-height: 40px;
+  --clients-control-height: 26px;
+}
+
+table.clients-list-table[data-density="default"] {
+  --clients-row-height: 48px;
+  --clients-control-height: 30px;
+}
+
+table.clients-list-table[data-density="comfortable"] {
+  --clients-row-height: 56px;
+  --clients-control-height: 34px;
+}
+
+table.clients-list-table thead tr,
+table.llb-table.clients-list-table[data-density] thead th {
+  height: 32px !important;
+  max-height: 32px !important;
+  padding: 0 8px !important;
+  line-height: 1.1 !important;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+table.clients-list-table tbody tr,
+table.llb-table.clients-list-table[data-density] tbody td {
+  height: var(--clients-row-height) !important;
+  min-height: var(--clients-row-height) !important;
+  max-height: var(--clients-row-height) !important;
+}
+
+table.llb-table.clients-list-table[data-density] tbody td {
+  padding: 0 8px !important;
+  line-height: 1.1 !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+table.clients-list-table select[id^="client-status-"] {
+  width: 66px !important;
+  min-width: 66px !important;
+  height: var(--clients-control-height) !important;
+  min-height: var(--clients-control-height) !important;
+  max-height: var(--clients-control-height) !important;
+  line-height: calc(var(--clients-control-height) - 2px) !important;
+  margin: 0 !important;
+  padding: 0 18px 0 6px !important;
+  border-radius: 6px !important;
+  font-size: 10px !important;
+  flex: 0 0 66px !important;
+}
+
+table.clients-list-table td.llb-actions [data-actions-menu] > button {
+  width: var(--clients-control-height) !important;
+  min-width: var(--clients-control-height) !important;
+  height: var(--clients-control-height) !important;
+  min-height: var(--clients-control-height) !important;
+  padding: 0 !important;
+  border-radius: 6px !important;
+}
+
+table.clients-list-table th:last-child,
+table.clients-list-table td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 3;
+  background: #ffffff;
+  box-shadow: -1px 0 0 #e2e8f0;
+}
+
+table.clients-list-table thead th:last-child {
+  z-index: 5;
+  background: #f8fafc;
+}
+
+table.clients-list-table tbody tr:hover td:last-child {
+  background: #f1f8ff;
+}
+
+/* Client list row actions: kebab (3-dots) fixed overlay menu (rendered via portal).
+   position: fixed + high z-index so table overflow / sticky cells can't clip it. */
+.clients-actions-menu {
+  position: fixed;
+  z-index: 9999;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+  padding: 6px;
+  min-width: 190px;
+  display: grid;
+  gap: 2px;
+}
+
+/* Menu is a body-level fixed overlay, so no table sizing overrides apply here. */
+.clients-actions-menu button {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 9px 12px !important;
+  border: none !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  cursor: pointer !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  text-align: left !important;
+  white-space: nowrap !important;
+}
+
+.clients-actions-menu button:hover {
+  background: #f1f5f9 !important;
+}
+
+.clients-archived-label {
+  flex: 0 0 auto;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+@media (max-width: 820px) {
+  table.clients-list-table {
+    min-width: 680px;
+  }
+}
+
+/* Modal/card containers already provide the visual boundary. Do not draw a
+   second rounded "card" around forms nested inside them. */

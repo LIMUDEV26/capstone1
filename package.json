@@ -1,0 +1,98 @@
+{
+  "name": "capstone1",
+  "version": "0.1.0",
+  "private": true,
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "node scripts/run-next-network.mjs dev",
+    "build": "next build --webpack",
+    "start": "node scripts/start-with-ngrok.mjs",
+    "start:prod": "node scripts/start-with-ngrok.mjs --no-desktop",
+    "start:prod:tunnel": "node scripts/start-with-ngrok.mjs --no-desktop",
+    "start:no-tunnel": "node scripts/start-with-ngrok.mjs --no-tunnel",
+    "desktop": "electron .",
+    "desktop:dev": "electron . --devtools",
+    "desktop:check": "node electron/check.cjs",
+    "desktop:dir": "electron-builder --dir",
+    "desktop:build": "electron-builder --win nsis",
+    "lint": "eslint --cache --cache-location .next/cache/eslint .",
+    "lint:file": "eslint --cache --cache-location .next/cache/eslint",
+    "clean:storage": "node scripts/cleanup-storage.mjs",
+    "clean:storage:deep": "node scripts/cleanup-storage.mjs --deep",
+    "clean:npm-cache": "npm cache clean --force",
+    "doctor": "npx react-doctor@latest"
+  },
+  "dependencies": {
+    "@types/estree": "^1.0.9",
+    "altcha": "^2.3.0",
+    "axios": "^1.13.5",
+    "bcryptjs": "3.0.3",
+    "chart.js": "^4.5.1",
+    "chartjs-plugin-datalabels": "^2.2.0",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
+    "libphonenumber-js": "1.13.14",
+    "lightningcss": "^1.32.0",
+    "lucide-react": "^1.24.0",
+    "next": "^16.3.2",
+    "nodemailer": "^10.0.12",
+    "pg": "8.23.0",
+    "react": "19.2.3",
+    "react-chartjs-2": "^5.3.1",
+    "react-dom": "19.2.3",
+    "react-spinners": "^0.17.0",
+    "sharp": "^0.35.3",
+    "sweetalert2": "^11.26.19"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/nodemailer": "^8.0.2",
+    "@types/pg": "8.23.1",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "babel-plugin-react-compiler": "^1.0.0",
+    "electron": "44.4.5",
+    "electron-builder": "^26.15.3",
+    "eslint": "^10.8.0",
+    "eslint-config-next": "^16.3.2",
+    "mysql2": "3.24.4",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  },
+  "overrides": {
+    "nanoid": "^3.3.18",
+    "postcss": "^8.5.23",
+    "js-yaml": "^4.3.1",
+    "dompurify": "^3.4.14"
+  },
+  "build": {
+    "appId": "com.capstone1.desktop",
+    "productName": "Capstone1 Desktop",
+    "executableName": "Capstone1Desktop",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "public/favicon.ico",
+      "package.json"
+    ],
+    "win": {
+      "icon": "public/favicon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

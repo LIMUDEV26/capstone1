@@ -1,0 +1,77 @@
+Options -Indexes +MultiViews
+RewriteEngine On
+# ── Phase 0 containment: deny-list ───────────────────────────────────────────
+# httpd.conf grants `Options Indexes` to C:/xampp/htdocs, and an existing file
+# always beats the out/ rewrite below. Together those made .env.local,
+# database/Capstone1.sql, runtime/jar*.txt (live PHPSESSID values), .git/config,
+# config/menu.ts, api/.altcha_hmac_key fetchable over HTTP, with index-listing
+# on backups/, runtime/, scripts/ and docs/.
+#
+# These rules run BEFORE the rewrite so a real file on disk can never be served.
+#
+# 1. Dotfiles and dot-directories (.env.local, .git/config, .cookiejar,
+#    .user.ini, .altcha_hmac_key, .next/, ...). .well-known stays reachable.
+RewriteRule "(^|/)\.(?!well-known/)" - [F]
+# 2. Sensitive by extension: dumps, logs, editor/backup artifacts, keys.
+#    Deliberately omits .json/.txt/.md/.ts/.mjs so static `out/` assets keep
+#    working — the root-level project files are named explicitly in rule 4.
+RewriteRule "\.(sql|log|bak|old|orig|tmp|ini|lock|swp|swo|phar|pem|key|crt|p12)$" - [F]
+# 3. Server-side, build-tooling and source directories. `out/` (the static
+#    export), `api/` (the PHP API), `public/`, `website/` and `uploads/` (which
+#    has its own deny .htaccess) are intentionally NOT listed.
+RewriteRule "^(backups|runtime|memory|scripts|docs|database|test-data|vendor|mcp-servers|electron|ui-ux-pro-max-skill|node_modules|pages|components|utils|styles|types|config|docker)/" - [F]
+# 3b. Bundled library sources inside api/ — reachable, but not part of the API.
+RewriteRule "^api/(lib|examples)/" - [F]
+# 4. Root-level project/config files that must never be fetched.
+RewriteRule "^(package\.json|package-lock\.json|composer\.json|composer\.lock|composer\.phar|next\.config\.ts|tsconfig\.json|tsconfig\.tsbuildinfo|eslint\.config\.mjs|postcss\.config\.mjs|render\.yaml|compose\.yaml|Dockerfile|next-env\.d\.ts|AGENTS\.md|CLAUDE\.md|skills-lock\.json|run_payroll_migration\.bat|react-doctor-report\.json|react-doctor-summary\.txt|tsc-err\.txt|tsc-out\.txt)$" - [F]
+
+# Stop once the request has already been mapped into the static export. Without
+# this, the `^(.*)$ out/$1` rule below re-prepends "out/" on every
+# per-directory pass, so any request for a missing file loops until AH00124
+# (10 internal redirects) and returns a misleading 500 instead of a 404.
+RewriteRule ^out/ - [L]
+
+RewriteRule ^$ out/ [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ out/$1 [L]
+
+# ── Security headers ─────────────────────────────────────────────────────────
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+    # HSTS must only go out over real HTTPS. Sending it from plain http://localhost
+    # makes the browser force-https localhost afterwards, which then presents as
+    # "localhost:3000 is blocked" — the exact failure next.config.ts already guards
+    # against with its NODE_ENV check. `env=HTTPS` applies the same rule here:
+    # mod_ssl sets HTTPS only when the connection is genuinely encrypted.
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" env=HTTPS
+    # Strip server version banners
+    Header always unset X-Powered-By
+    Header always unset Server
+
+    # ── Content Security Policy (Phase 1.3) ──────────────────────────────────
+    # next.config.ts only applies headers when Node serves the app. Apache serves
+    # the static export in out/, which previously had NO CSP at all.
+    #
+    # Scoped to what the app actually loads, enumerated from source (not just the
+    # current out/ build, which is stale and lacks the branches map):
+    #   fonts.googleapis.com / fonts.gstatic.com  pages/_document.tsx web fonts
+    #   js.hcaptcha.com + *.hcaptcha.com          pages/forgot-password.tsx widget
+    #   api.hcaptcha.com                          widget XHR
+    #   nominatim.openstreetmap.org               pages/branches address search
+    #   www.openstreetmap.org                     pages/branches map <iframe>
+    #   blob:                                     <iframe src={URL.createObjectURL}>
+    #                                             PDF previews in my-tasks,
+    #                                             task-workflow, projects/detail,
+    #                                             and utils/reportExport print frame
+    #
+    # Next.js emits inline hydration data, so 'unsafe-inline' remains until the
+    # app moves fully to request-scoped nonces. Production never needs eval.
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://js.hcaptcha.com https://*.hcaptcha.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self'; connect-src 'self' https://api.hcaptcha.com https://*.hcaptcha.com https://nominatim.openstreetmap.org; frame-src 'self' blob: https://hcaptcha.com https://*.hcaptcha.com https://www.openstreetmap.org; worker-src 'self' blob:; object-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+</IfModule>
+
+# ── Hide Apache/PHP version information ──────────────────────────────────────
+ServerSignature Off

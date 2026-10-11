@@ -1,0 +1,67 @@
+# Dependencies
+node_modules/
+
+# Next.js build/runtime output
+.next/
+out/
+HTML/
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+# Environment files
+.env
+.env.local
+.env.*.local
+# Server-local secrets (Phase 0). These used to be committed in api/.htaccess.
+api/.secrets.php
+api/.altcha_hmac_key
+api/.setup_done
+# Security-scan / smoke-test scratch output
+.smoke-*.tmp
+# Committed curl cookie jars carrying live PHPSESSID values, and the ALTCHA
+# HMAC signing key. Untracked in Phase 0 — see docs/SECURITY_HARDENING.md.
+.cookiejar
+runtime/jar*.txt
+runtime/*.log
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+# Python virtual environments
+venv/
+.venv/
+**/venv/
+**/.venv/
+# Python cache
+__pycache__/
+*.pyc
+# Temporary artifacts
+tmp/
+temp/
+
+# Runtime/user data must never enter source control or deployment artifacts.
+uploads/**
+backups/
+database/Capstone1.sql
+database/migrate_18_standard_report_users.sql
+scripts/reset_passwords.sql
+# === MUSE Private Files ===
+.muse/
+memory/
+convo/
+CLAUDE.md
+USER.md
+MEMORIES.md
+.agent/
+deploy-hostinger/
+# Windows-reserved stray artifact
+nul
+.kilo/worktrees/
+
+.vercel
+
+uploads/
