@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -f /etc/apache2/mods-enabled/mpm_*.load /etc/apache2/mods-enabled/mpm_*.conf \
     && ln -s /etc/apache2/mods-available/mpm_prefork.load /etc/apache2/mods-enabled/mpm_prefork.load \
     && ln -s /etc/apache2/mods-available/mpm_prefork.conf /etc/apache2/mods-enabled/mpm_prefork.conf \
-    && a2enmod rewrite headers \
+    && a2enmod rewrite headers deflate expires \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /var/www/html
@@ -34,10 +34,13 @@ COPY vendor/ ./capstone1/vendor/
 COPY docker/api.htaccess.prod ./capstone1/api/.htaccess
 COPY docker/uploads.htaccess.prod /usr/local/share/llb/uploads.htaccess
 COPY docker/000-default.conf /etc/apache2/sites-available/000-default.conf
+COPY docker/performance.conf /etc/apache2/conf-available/performance.conf
+COPY docker/php-performance.ini /usr/local/etc/php/conf.d/zz-performance.ini
 COPY docker/aiven-ca.pem /etc/ssl/certs/aiven-ca.pem
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 
-RUN chmod +x /usr/local/bin/entrypoint.sh \
+RUN a2enconf performance \
+    && chmod +x /usr/local/bin/entrypoint.sh \
     && chown -R www-data:www-data /var/www/html/capstone1
 
 EXPOSE 8080
