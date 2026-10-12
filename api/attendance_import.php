@@ -482,7 +482,8 @@ function fetchAttendanceImportEmployeeDirectory($conn) {
 
         $dateIdKey = normalizeIdentityKey($row['employee_date_id'] ?? '');
         if ($dateIdKey !== '') {
-            $byDateId[$dateIdKey] = $employee;
+            if (!isset($byDateId[$dateIdKey])) $byDateId[$dateIdKey] = [];
+            $byDateId[$dateIdKey][] = $employee;
         }
     }
 
@@ -636,15 +637,52 @@ function resolveImportedEmployee($employeeDirectory, $base44Mappings, $sourceSys
     // A ZKTeco EmployeeID is the authoritative identity signal.  It must be
     // checked before any saved external mapping, otherwise a stale mapping can
     // attach attendance (and payroll) to the wrong person.
-    if ($externalCodeKey !== '' && !empty($employeeDirectory['by_date_id'][$externalCodeKey])) {
-        $employee = $employeeDirectory['by_date_id'][$externalCodeKey];
-        return buildResolvedEmployeeMatch(
-            $employee,
-            'employee_date_id_match',
-            'Biometric ID matched employee record',
-            1.0,
-            ['ZKTeco Employee ID "' . $externalEmployeeCode . '" matched employee code "' . $employee['employee_date_id'] . '"']
-        );
+    if ($externalCodeKey !== '' && count($employeeDirectory['by_date_id'][$externalCodeKey] ?? []) === 1) {
+        $employee = $employeeDirectory['by_date_id'][$externalCodeKey][0];
+        // A conflicting name can indicate that a biometric code was reassigned.
+        // If the file name uniquely identifies someone else, trust that exact
+        // name match instead of silently importing under the old code owner.
+        $nameConflicts = $externalNameKey !== ''
+            && $employee['normalized_full_name'] !== ''
+            && $externalNameKey !== $employee['normalized_full_name'];
+        if (!$nameConflicts) {
+            return buildResolvedEmployeeMatch(
+                $employee,
+                'employee_date_id_match',
+                'Biometric ID matched employee record',
+                1.0,
+                ['ZKTeco Employee ID "' . $externalEmployeeCode . '" matched employee code "' . $employee['employee_date_id'] . '"']
+            );
+        }
+        $uniqueNameMatches = $employeeDirectory['by_name'][$externalNameKey] ?? [];
+        if (count($uniqueNameMatches) === 1) {
+            return buildResolvedEmployeeMatch(
+                $uniqueNameMatches[0],
+                'smart_name_match',
+                'Exact employee name matched; biometric ID differed',
+                0.96,
+                ['Exact employee name matched; the file ID pointed to a different employee']
+            );
+        }
+        return [
+            'ok' => false,
+            'message' => 'The uploaded biometric ID matches "' . $employee['name'] . '", but the uploaded name "' . $externalEmployeeName . '" does not. No unique employee-name match was found, so this row was not assigned to the wrong person.',
+        ];
+    }
+
+    // When the biometric ID is unknown or duplicated locally, a unique exact
+    // name in the uploaded file is safer than a stale external code mapping.
+    if ($externalNameKey !== '') {
+        $uniqueNameMatches = $employeeDirectory['by_name'][$externalNameKey] ?? [];
+        if (count($uniqueNameMatches) === 1) {
+            return buildResolvedEmployeeMatch(
+                $uniqueNameMatches[0],
+                'smart_name_match',
+                'Unique exact employee name matched',
+                0.96,
+                ['Unique exact employee name in the uploaded file']
+            );
+        }
     }
 
     // Saved external mappings are a fallback only when the source code is not
@@ -1007,6 +1045,7 @@ function handleImport($conn) {
     $columnMap = array_flip($headers);
     $batchId = 'ATT-' . date('Ymd-His') . '-' . substr(uniqid(), -5);
     $created = 0;
+    $updated = 0;
     $skipped = 0;
     $errorsList = [];
     $warningsList = [];
@@ -1018,6 +1057,7 @@ function handleImport($conn) {
     // Per-row evidence behind each result card so the UI can show WHICH
     // employee/row landed in each bucket instead of a bare count.
     $createdDetails = [];
+    $updatedDetails = [];
     $skippedDetails = [];
     $identityDetails = [
         'matched_via_biometric_id' => [],
@@ -1192,14 +1232,15 @@ function handleImport($conn) {
             $incompletePayrollEmployees[$employeeId] = $employee['name'];
         }
 
+        $sourceNameForDetails = $externalEmployeeName !== '' ? $externalEmployeeName : $employee['name'];
         if (($resolution['method'] ?? '') === 'employee_date_id_match') {
             $identitySummary['matched_via_biometric_id']++;
             $identityDetails['matched_via_biometric_id'][] = importDetailEntry(
                 $rowNum,
                 $externalEmployeeCode,
-                $employee['name'],
+                $sourceNameForDetails,
                 'matched_via_biometric_id',
-                'Matched to employee #' . $employeeId . ' by exact ZKTeco Employee ID',
+                'File name: ' . ($externalEmployeeName !== '' ? $externalEmployeeName : '(not provided)') . '; matched registered employee "' . $employee['name'] . '" (#' . $employeeId . ') by exact ZKTeco Employee ID.',
                 $employeeId
             );
         } elseif (($resolution['method'] ?? '') === 'smart_name_match') {
@@ -1207,9 +1248,9 @@ function handleImport($conn) {
             $identityDetails['matched_via_smart_name'][] = importDetailEntry(
                 $rowNum,
                 $externalEmployeeCode,
-                $employee['name'],
+                $sourceNameForDetails,
                 'matched_via_smart_name',
-                'Matched to employee #' . $employeeId . ' by employee name',
+                'File name matched registered employee "' . $employee['name'] . '" (#' . $employeeId . ').',
                 $employeeId
             );
         } else {
@@ -1217,31 +1258,36 @@ function handleImport($conn) {
             $identityDetails['matched_via_base44'][] = importDetailEntry(
                 $rowNum,
                 $externalEmployeeCode,
-                $employee['name'],
+                $sourceNameForDetails,
                 'matched_via_base44',
-                'Matched to employee #' . $employeeId . ' from the Base44 identity map',
+                'File name: ' . ($externalEmployeeName !== '' ? $externalEmployeeName : '(not provided)') . '; matched registered employee "' . $employee['name'] . '" (#' . $employeeId . ') from the confirmed identity map.',
                 $employeeId
             );
         }
 
         $duplicateStmt = $conn->prepare(
-            "SELECT id
+            "SELECT *
              FROM payroll
-             WHERE employee_id = ? AND pay_period_start = ? AND pay_period_end = ?"
+             WHERE employee_id = ? AND pay_period_start = ? AND pay_period_end = ?
+             ORDER BY CASE WHEN LOWER(status) = 'draft' THEN 1 ELSE 0 END, id DESC
+             LIMIT 1"
         );
         if (!$duplicateStmt) {
             throw new RuntimeException('Failed to validate duplicate payroll records.');
         }
         $duplicateStmt->bind_param('iss', $employeeId, $payPeriodStart, $payPeriodEnd);
         $duplicateStmt->execute();
-        if ($duplicateStmt->get_result()->num_rows > 0) {
+        $duplicateResult = $duplicateStmt->get_result();
+        $existingPayroll = $duplicateResult ? $duplicateResult->fetch_assoc() : null;
+        $duplicateStmt->close();
+        $existingPayrollId = intval($existingPayroll['id'] ?? 0);
+        if ($existingPayrollId > 0 && strtolower(trim((string)($existingPayroll['status'] ?? ''))) !== 'draft') {
             $skipped++;
             $duplicatePayrollEmployees[$employeeId] = true;
-            $skippedDetails[] = importDetailEntry($rowNum, $externalEmployeeCode, $employee['name'], 'duplicate', 'Attendance was already imported for this pay period; duplicate payroll was not created.', $employeeId);
-            $duplicateStmt->close();
+            $existingStatus = trim((string)($existingPayroll['status'] ?? 'finalized'));
+            $skippedDetails[] = importDetailEntry($rowNum, $externalEmployeeCode, $externalEmployeeName !== '' ? $externalEmployeeName : $employee['name'], 'duplicate', 'Payroll #' . $existingPayrollId . ' already exists for ' . $payPeriodStart . ' to ' . $payPeriodEnd . ' with status "' . $existingStatus . '". It was left unchanged.', $employeeId, $existingPayrollId);
             continue;
         }
-        $duplicateStmt->close();
 
         $monthlySalary = floatval($employee['salary']);
         $companyDailyRate = getCompanyDailyRate($conn, intval($employee['branch_id'] ?? 0));
@@ -1287,28 +1333,30 @@ function handleImport($conn) {
             $leaveImpactAmount = round($leaveImpactDays * $dailyRate, 2);
         }
 
-        $tax = 0;
-        $sss = 0;
-        $pagibig = 0;
-        $philhealth = 0;
-        $cashAdvance = 0;
-        $laptopLoan = 0;
-        $otherDeductions = 0;
-        $bonus = 0;
-        $clothingAllowance = 0;
-        $travelAllowance = 0;
-        $salaryAdjustment = 0;
+        $tax = floatval($existingPayroll['tax'] ?? 0);
+        $sss = floatval($existingPayroll['sss_contribution'] ?? 0);
+        $pagibig = floatval($existingPayroll['pagibig_contribution'] ?? 0);
+        $philhealth = floatval($existingPayroll['philhealth_contribution'] ?? 0);
+        $cashAdvance = floatval($existingPayroll['cash_advance_deduction'] ?? 0);
+        $laptopLoan = floatval($existingPayroll['laptop_loan_deduction'] ?? 0);
+        $otherDeductions = floatval($existingPayroll['other_deductions'] ?? 0);
+        $bonus = floatval($existingPayroll['bonus'] ?? 0);
+        $clothingAllowance = floatval($existingPayroll['clothing_allowance'] ?? 0);
+        $travelAllowance = floatval($existingPayroll['travel_allowance'] ?? 0);
+        $salaryAdjustment = floatval($existingPayroll['salary_adjustment'] ?? 0);
 
         // Auto-calculate government deductions from settings when available.
         // Deduction-type tables (SSS MSC, tax brackets) are MONTHLY bases,
         // so they always use the monthly salary — not the semi-monthly basic.
         $govEligibility = buildGovEligibilityFromEmployee($employee);
         $governmentMonthlyBase = $usesCompanyDailyRate ? ($companyDailyRate * 22) : $monthlySalary;
-        $govDefaults = computeGovernmentDeductionsFromTypes($conn, floatval($governmentMonthlyBase), $govEligibility);
-        if (isset($govDefaults['tax'])) $tax = $govDefaults['tax'];
-        if (isset($govDefaults['sss_contribution'])) $sss = $govDefaults['sss_contribution'];
-        if (isset($govDefaults['pagibig_contribution'])) $pagibig = $govDefaults['pagibig_contribution'];
-        if (isset($govDefaults['philhealth_contribution'])) $philhealth = $govDefaults['philhealth_contribution'];
+        if (!$existingPayroll) {
+            $govDefaults = computeGovernmentDeductionsFromTypes($conn, floatval($governmentMonthlyBase), $govEligibility);
+            if (isset($govDefaults['tax'])) $tax = $govDefaults['tax'];
+            if (isset($govDefaults['sss_contribution'])) $sss = $govDefaults['sss_contribution'];
+            if (isset($govDefaults['pagibig_contribution'])) $pagibig = $govDefaults['pagibig_contribution'];
+            if (isset($govDefaults['philhealth_contribution'])) $philhealth = $govDefaults['philhealth_contribution'];
+        }
 
         $totalDeductions = $tax + $sss + $pagibig + $philhealth + $cashAdvance + $laptopLoan + $otherDeductions;
         $netPay = max(0, $grossPay - $totalDeductions + $bonus);
@@ -1327,7 +1375,13 @@ function handleImport($conn) {
         }
         $importNote = 'Attendance imported: ' . implode(', ', $attendanceNoteParts) . '.';
 
-        $attendanceStmt = $conn->prepare(
+        $attendanceStmt = $existingPayrollId > 0
+            ? $conn->prepare(
+            "UPDATE attendance_records
+             SET days_worked = ?, overtime_hours = ?, late_minutes = ?, absent_days = ?, leave_days = ?, import_batch_id = ?
+             WHERE employee_id = ? AND pay_period_start = ? AND pay_period_end = ?
+             ORDER BY id DESC LIMIT 1"
+        ) : $conn->prepare(
             "INSERT INTO attendance_records
                 (employee_id, pay_period_start, pay_period_end, days_worked, overtime_hours,
                  late_minutes, absent_days, leave_days, import_batch_id)
@@ -1356,20 +1410,41 @@ function handleImport($conn) {
 
         $conn->begin_transaction();
         try {
-            $attendanceStmt->bind_param(
-                'issddidds',
-                $employeeId,
-                $payPeriodStart,
-                $payPeriodEnd,
-                $daysWorked,
-                $otHours,
-                $lateMinutes,
-                $absentDays,
-                $leaveDays,
-                $batchId
-            );
+            if ($existingPayrollId > 0) {
+                $attendanceStmt->bind_param('ddiddsiss', $daysWorked, $otHours, $lateMinutes, $absentDays, $leaveDays, $batchId, $employeeId, $payPeriodStart, $payPeriodEnd);
+            } else {
+                $attendanceStmt->bind_param('issddidds', $employeeId, $payPeriodStart, $payPeriodEnd, $daysWorked, $otHours, $lateMinutes, $absentDays, $leaveDays, $batchId);
+            }
             $attendanceStmt->execute();
+            if ($existingPayrollId > 0 && $attendanceStmt->affected_rows === 0) {
+                $attendanceInsertStmt = $conn->prepare(
+                    "INSERT INTO attendance_records
+                        (employee_id, pay_period_start, pay_period_end, days_worked, overtime_hours,
+                         late_minutes, absent_days, leave_days, import_batch_id)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                );
+                if (!$attendanceInsertStmt) throw new RuntimeException('Failed to prepare attendance record repair.');
+                $attendanceInsertStmt->bind_param('issddidds', $employeeId, $payPeriodStart, $payPeriodEnd, $daysWorked, $otHours, $lateMinutes, $absentDays, $leaveDays, $batchId);
+                $attendanceInsertStmt->execute();
+                $attendanceInsertStmt->close();
+            }
 
+            if ($existingPayrollId > 0) {
+                $payrollUpdateStmt = $conn->prepare(
+                    "UPDATE payroll SET employee_name = ?, basic_salary = ?, overtime_hours = ?, overtime_rate = ?, overtime_pay = ?,
+                     late_deduction = ?, absence_deduction = ?, unpaid_leave_days = ?, unpaid_leave_amount = ?, total_deductions = ?,
+                     gross_pay = ?, net_pay = ?, notes = ? WHERE id = ? AND LOWER(status) = 'draft'"
+                );
+                if (!$payrollUpdateStmt) throw new RuntimeException('Failed to prepare draft payroll update.');
+                $payrollUpdateStmt->bind_param(
+                    's' . str_repeat('d', 11) . 'si',
+                    $employee['name'], $basicSalary, $otHours, $otRate, $otPay, $lateDeduction, $absenceDeduction,
+                    $leaveImpactDays, $leaveImpactAmount, $totalDeductions, $grossPay, $netPay, $importNote, $existingPayrollId
+                );
+                $payrollUpdateStmt->execute();
+                $payrollUpdateStmt->close();
+                $payrollId = $existingPayrollId;
+            } else {
             $payrollBindTypes = 'isss' . str_repeat('d', 23) . 's';
             $payrollStmt->bind_param(
                 $payrollBindTypes,
@@ -1404,21 +1479,29 @@ function handleImport($conn) {
             );
             $payrollStmt->execute();
             $payrollId = intval($conn->insert_id);
+            }
             if ($payrollId > 0) {
                 syncPayrollCashAdvanceRequests($conn, $payrollId);
             }
 
             $conn->commit();
-            $created++;
-            $createdDetails[] = importDetailEntry(
+            if ($existingPayrollId > 0) {
+                $updated++;
+                $duplicatePayrollEmployees[$employeeId] = true;
+            } else {
+                $created++;
+            }
+            $successDetail = importDetailEntry(
                 $rowNum,
                 $externalEmployeeCode,
-                $employee['name'],
-                'created',
+                $externalEmployeeName !== '' ? $externalEmployeeName : $employee['name'],
+                $existingPayrollId > 0 ? 'updated' : 'created',
                 'Draft payroll #' . $payrollId . ' — net ' . number_format($netPay, 2) . ' for ' . $payPeriodStart . ' to ' . $payPeriodEnd,
                 $employeeId,
                 $payrollId
             );
+            if ($existingPayrollId > 0) $updatedDetails[] = $successDetail;
+            else $createdDetails[] = $successDetail;
         } catch (Throwable $e) {
             $conn->rollback();
             $skipped++;
@@ -1439,7 +1522,9 @@ function handleImport($conn) {
         }
         if (!empty($duplicatePayrollEmployees)) {
             $duplicateCount = count($duplicatePayrollEmployees);
-            if ($created === 0) {
+            if ($updated > 0) {
+                $warningsList[] = "$updated existing draft payroll record(s) were updated from the uploaded attendance. Finalized payroll records were left unchanged.";
+            } elseif ($created === 0) {
                 $warningsList[] = 'This attendance file was already imported for the selected pay period. No duplicate payroll records were created.';
             } else {
                 $warningsList[] = "$duplicateCount existing payroll record(s) were skipped to prevent duplicate payments.";
@@ -1450,7 +1535,7 @@ function handleImport($conn) {
         releaseSessionLock();
     if ($userId) {
         $payrollRecordLabel = $created === 1 ? 'draft payroll record' : 'draft payroll records';
-        $activityDescription = "Attendance file imported; {$created} {$payrollRecordLabel} created.";
+        $activityDescription = "Attendance file imported; {$created} {$payrollRecordLabel} created and {$updated} draft payroll record(s) updated.";
         if ($skipped > 0) {
             $skippedLabel = $skipped === 1 ? 'row was' : 'rows were';
             $activityDescription .= " {$skipped} {$skippedLabel} not imported.";
@@ -1473,6 +1558,7 @@ function handleImport($conn) {
                 'batch_id' => $batchId,
                 'source_system' => $sourceSystem,
                 'records_created' => $created,
+                'records_updated' => $updated,
                 'records_skipped' => $skipped,
                 'error_count' => count($errorsList),
                 'warning_count' => count($warningsList),
@@ -1511,6 +1597,7 @@ function handleImport($conn) {
             'batch_id' => $batchId,
             'source_system' => $sourceSystem,
             'records_created' => $created,
+            'records_updated' => $updated,
             'records_skipped' => $skipped,
             'errors' => $errorsList,
             'warnings' => $warningsList,
@@ -1518,6 +1605,7 @@ function handleImport($conn) {
             // Per-row evidence behind each result card ("which is which").
             'details' => [
                 'created' => $createdDetails,
+                'updated' => $updatedDetails,
                 'skipped' => $skippedDetails,
                 'matched_via_biometric_id' => $identityDetails['matched_via_biometric_id'],
                 'matched_via_base44' => $identityDetails['matched_via_base44'],
@@ -1525,7 +1613,7 @@ function handleImport($conn) {
                 'unresolved' => $identityDetails['unresolved'],
             ],
         ],
-        $created > 0 ? "$created payroll record(s) created as draft" : 'No payroll records were created'
+        ($created + $updated) > 0 ? "$created payroll record(s) created and $updated draft record(s) updated" : 'No payroll records were created or updated'
     );
 }
 

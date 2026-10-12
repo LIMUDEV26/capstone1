@@ -1439,6 +1439,7 @@ export default function PayrollManagement() {
         }));
         return [
             { key: 'created', label: 'Records Created', tone: '#059669', bg: '#f8fafc', border: '#e2e8f0', count: Number(importResult.records_created) || 0, items: (details.created || []) as ImportDetailItem[] },
+            { key: 'updated', label: 'Drafts Updated', tone: '#0369a1', bg: '#f0f9ff', border: '#e0f2fe', count: Number(importResult.records_updated) || 0, items: (details.updated || []) as ImportDetailItem[] },
             { key: 'skipped', label: 'Skipped', tone: '#f59e0b', bg: '#f8fafc', border: '#e2e8f0', count: Number(importResult.records_skipped) || 0, items: (details.skipped || []) as ImportDetailItem[] },
             { key: 'errors', label: 'Errors', tone: '#dc2626', bg: '#f8fafc', border: '#e2e8f0', count: errorItems.length, items: errorItems },
             { key: 'biometric_id', label: 'Biometric ID Matched', tone: '#1d4ed8', bg: '#eff6ff', border: '#dbeafe', count: Number(identity.matched_via_biometric_id) || 0, items: (details.matched_via_biometric_id || []) as ImportDetailItem[] },
