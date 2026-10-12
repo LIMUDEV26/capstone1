@@ -2035,6 +2035,11 @@ table.llb-table td.llb-actions > * {
   transition: opacity 0.15s ease;
 }
 
+/* Archive actions are the only control in the row, so keep Restore visible. */
+table.llb-table td.llb-actions-always-visible > * {
+  opacity: 1;
+}
+
 table.llb-table tbody tr:hover td.llb-actions > *,
 table.llb-table tbody tr:focus-within td.llb-actions > * {
   opacity: 1;

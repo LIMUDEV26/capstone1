@@ -1164,7 +1164,7 @@ export default function Users() {
                                     </td>
                                 )}
                                 <td style={tableCellStyle}>{new Date(u.created_at).toLocaleDateString()}</td>
-                                <td style={{ ...tableCellStyle, textAlign: 'center', position: 'relative' }} className="llb-actions">
+                                <td style={{ ...tableCellStyle, textAlign: 'center', position: 'relative' }} className={`llb-actions${showArchiveView ? ' llb-actions-always-visible' : ''}`}>
                                     {showArchiveView ? (
                                         <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                                             <button onClick={() => handleRestore(u.id)} title="Restore" aria-label={`Restore ${u.first_name} ${u.last_name}`} style={{ padding: '6px 12px', background: '#16a34a', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
