@@ -99,6 +99,13 @@ function normalizeImportSourceSystem($value) {
     return $normalized !== '' ? $normalized : 'payroll_excel';
 }
 
+/** Normalize spreadsheet header labels so spaces, underscores, and punctuation do not affect matching. */
+function normalizeAttendanceHeader($value) {
+    $header = strtolower(trim((string)$value));
+    $header = preg_replace('/^\xEF\xBB\xBF/', '', $header) ?? $header;
+    return preg_replace('/[^a-z0-9]/', '', $header) ?? $header;
+}
+
 function normalizeIdentityValue($value) {
     $normalized = preg_replace('/\s+/', ' ', trim((string)$value));
     return is_string($normalized) ? $normalized : '';
@@ -884,7 +891,7 @@ function handleImport($conn) {
         sendError('The uploaded file contains no data rows', 400);
     }
 
-    $headers = array_map('strtolower', array_map('trim', $rows[0]));
+    $headers = array_map('normalizeAttendanceHeader', $rows[0]);
     $requiredColumns = ['daysworked', 'overtimehours', 'lateminutes', 'absentdays'];
     $missingColumns = [];
     foreach ($requiredColumns as $column) {
