@@ -91,6 +91,7 @@ type UserRecord = {
     branch_id?: number | string | null;
     employee_id?: number | string | null;
     branch_name?: string | null;
+    employee_storage_deleted_at?: string | null;
     salary?: number | string | null;
     photo?: string | null;
     sss_number?: string | null;
@@ -724,6 +725,41 @@ export default function Users() {
         await doRestoreUser(userId);
     };
 
+    const handleMoveArchivedEmployeeToStorage = async (target: UserRecord) => {
+        const employeeId = Number(target.employee_id || 0);
+        if (employeeId <= 0) {
+            void notifyError('This archived account is not linked to an employee record, so it cannot be moved to Employee Data Storage.');
+            return;
+        }
+
+        const label = `${target.first_name} ${target.last_name}`.trim() || target.email || 'this employee';
+        const confirmed = await confirmAction({
+            title: `Remove ${label} from Archived Employees?`,
+            text: 'The employee will move to Settings > Data Storage, where you can restore the record later. Employee and payroll history will be kept.',
+            confirmButtonText: 'Move to Data Storage',
+            cancelButtonText: 'Cancel',
+            icon: 'warning',
+        });
+        if (!confirmed) return;
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/employees.php`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ employee_id: employeeId, remove_to_storage: true }),
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.success) {
+                throw new Error(payload.message || 'Failed to move employee to Data Storage.');
+            }
+            await fetchUsers();
+            void notifySuccess(payload.message || 'Employee moved to Data Storage.');
+        } catch (err) {
+            void notifyError(err instanceof Error ? err.message : 'Failed to move employee to Data Storage.');
+        }
+    };
+
     // Toggle status (active/inactive) - not for locked users
     const handleToggleStatus = async (target: UserRecord) => {
         if (isProtectedRole(target.role)) {
@@ -847,8 +883,9 @@ export default function Users() {
     };
 
     // Filter users
-    const activeUsers = users.filter(u => u.status === 'active' || u.status === 'locked');
-    const archivedUsers = users.filter(u => u.status === 'inactive');
+    const visibleUsers = users.filter((u) => !String(u.employee_storage_deleted_at || '').trim());
+    const activeUsers = visibleUsers.filter(u => u.status === 'active' || u.status === 'locked');
+    const archivedUsers = visibleUsers.filter(u => u.status === 'inactive');
 
     const displayedUsers = (showArchiveView ? archivedUsers : activeUsers).filter(u => {
         const normalizedSearchTerm = searchTerm.trim().toLowerCase();
@@ -1175,6 +1212,11 @@ export default function Users() {
                                             <button onClick={() => handleRestore(u.id)} title="Restore" aria-label={`Restore ${u.first_name} ${u.last_name}`} style={{ padding: '6px 12px', background: '#16a34a', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                                                 <CrudActionIcon action="restore" />
                                             </button>
+                                            {String(user?.role || '').toLowerCase() === 'admin' && Number(u.employee_id || 0) > 0 && (
+                                                <button onClick={() => void handleMoveArchivedEmployeeToStorage(u)} title="Move to Data Storage" aria-label={`Remove ${u.first_name} ${u.last_name} from Archived Employees`} style={{ padding: '6px 10px', background: '#fff1f2', color: '#be123c', border: '1px solid #fecaca', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    Remove
+                                                </button>
+                                            )}
                                         </div>
                                     ) : (
                                         <>

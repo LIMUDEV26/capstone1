@@ -17,7 +17,7 @@ $conn = getDBConnection();
 
 // RBAC: Enforce authentication for all user management operations
 requireAuth();
-runRuntimeSchemaUpgradeOnce('users_employment_schema_v20260411', function () use ($conn) {
+runRuntimeSchemaUpgradeOnce('users_employment_schema_v20261012_storage', function () use ($conn) {
     ensureEmploymentSchema($conn);
     ensurePasswordPolicySchema($conn);
     ensureTableIndex(
@@ -106,6 +106,7 @@ function ensureEmploymentSchema($conn) {
     ensureColumn($conn, 'employees', 'document_diploma_tor', '`document_diploma_tor` TINYINT(1) NOT NULL DEFAULT 0');
     ensureColumn($conn, 'employees', 'document_employment_contract', '`document_employment_contract` TINYINT(1) NOT NULL DEFAULT 0');
     ensureColumn($conn, 'employees', 'salary', '`salary` DECIMAL(12,2) NOT NULL DEFAULT 0.00');
+    ensureColumn($conn, 'employees', 'storage_deleted_at', '`storage_deleted_at` DATETIME NULL');
     ensureColumn($conn, 'employees', 'department', '`department` VARCHAR(100) NULL');
     ensureColumn($conn, 'employees', 'employment_type', "`employment_type` VARCHAR(50) NOT NULL DEFAULT 'Full-Time'");
     if (function_exists('ensureUserStatusEnum')) {
@@ -839,7 +840,8 @@ function getEmploymentSelectColumns() {
             b.branch_name,
             CONCAT(e.first_name, ' ', e.last_name) as employee_name,
             e.salary as salary,
-            e.address as address";
+            e.address as address,
+            e.storage_deleted_at as employee_storage_deleted_at";
 }
 
 function getDocumentSelectColumns() {

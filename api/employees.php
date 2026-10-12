@@ -1443,7 +1443,9 @@ function handlePut($conn) {
         if ($employeeId <= 0) sendError('Valid employee ID is required.', 400);
 
         $isRestore = !empty($data['restore_from_storage']);
-        $condition = $isRestore ? 'storage_deleted_at IS NOT NULL' : "status = 'inactive' AND storage_deleted_at IS NULL";
+        $condition = $isRestore
+            ? 'storage_deleted_at IS NOT NULL'
+            : "storage_deleted_at IS NULL AND (status = 'inactive' OR EXISTS (SELECT 1 FROM users u WHERE u.employee_id = employees.employee_id AND u.status = 'inactive'))";
         $stmt = $conn->prepare("UPDATE employees SET storage_deleted_at = " . ($isRestore ? 'NULL' : 'NOW()') . " WHERE employee_id = ? AND $condition");
         if (!$stmt) sendError('Failed to prepare employee storage action.', 500);
         $stmt->bind_param('i', $employeeId);
@@ -1454,7 +1456,7 @@ function handlePut($conn) {
         if ($changed < 1) {
             sendError($isRestore
                 ? 'Employee was not found in Data Storage.'
-                : 'Only archived employees can be moved to Data Storage.', 409);
+                : 'Only an archived employee can be moved to Data Storage.', 409);
         }
 
         sendResponse(true, ['employee_id' => $employeeId], $isRestore
