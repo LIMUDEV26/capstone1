@@ -1152,7 +1152,9 @@ function handlePost($conn) {
         '?', '?', '?', '?',
         'NOW()'
     ];
-    $types = 'ssssssssiiisssssiiiiiiii';
+    // Match the insert parameters: 8 leading strings, the reset flag integer,
+    // 7 profile/date strings, then the 8 document checklist integers.
+    $types = 'ssssssssisssssssiiiiiiii';
     $params = [
         $username, $password, $email, $first_name, $last_name, $date_of_birth, $role, $status,
         $mustResetPassword, $passwordChangedAt, $passwordExpiresAt,
