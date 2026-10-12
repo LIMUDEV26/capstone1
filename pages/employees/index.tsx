@@ -625,7 +625,9 @@ export default function EmployeesPage() {
         const first = form.first_name.trim();
         const last = form.last_name.trim();
         if (!first) missing.first_name = 'Required.';
-        if (!last) missing.last_name = 'Required.';
+        // Existing employees may have no family name; keep it required only
+        // when adding a new employee.
+        if (!editing && !last) missing.last_name = 'Required.';
         if (!form.email.trim()) missing.email = 'Required.';
         if (isPhoneDraftEmpty(form.phone_number, DEFAULT_PHONE_COUNTRY_CODE)) missing.phone_number = 'Required.';
         if (!form.date_of_birth.trim()) missing.date_of_birth = 'Required.';
@@ -1285,7 +1287,7 @@ export default function EmployeesPage() {
                         <form onSubmit={submit} noValidate>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 8 }}>
                                 <TextField label='First Name *' name='first_name' value={form.first_name} onChange={setForm} required error={fieldErrors.first_name} onClearError={() => clearFieldError('first_name')} />
-                                <TextField label='Last Name *' name='last_name' value={form.last_name} onChange={setForm} required error={fieldErrors.last_name} onClearError={() => clearFieldError('last_name')} />
+                                <TextField label={editing ? 'Last Name (optional)' : 'Last Name *'} name='last_name' value={form.last_name} onChange={setForm} required={!editing} error={fieldErrors.last_name} onClearError={() => clearFieldError('last_name')} />
                                 <TextField label='Email *' name='email' value={form.email} onChange={setForm} type='email' required error={fieldErrors.email} onClearError={() => clearFieldError('email')} />
                                 <div>
                                     <label style={fieldLabel}>Phone *</label>

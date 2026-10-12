@@ -1494,7 +1494,6 @@ function handlePut($conn) {
 
     if (array_key_exists('last_name', $data)) {
         $lastName = normalizeEmployeeName($data['last_name'], 50);
-        if ($lastName === '') sendError('Last name cannot be empty.', 400);
         $updates[] = "last_name = ?";
         $params[] = $lastName;
         $types .= 's';
