@@ -1553,13 +1553,44 @@ function handleDelete($conn) {
     
     $record = $result->fetch_assoc();
     $check_stmt->close();
-    if ($record['status'] !== 'draft' && $record['status'] !== 'archived') {
-        sendError('Only draft or archived payroll records can be deleted', 400);
-    }
 
     $permanent = intval($_GET['permanent'] ?? 0) === 1;
     if ($permanent) {
-        sendError('Manual permanent deletion is disabled. Payroll records in Data Storage are removed automatically after five years.', 403);
+        // Permanent removal is available only to administrators and only for
+        // payroll records that have already been archived into Data Storage.
+        requireRole(['admin']);
+        if ($record['status'] !== 'archived' || empty($record['storage_deleted_at'])) {
+            sendError('Only archived payroll records in Data Storage can be permanently deleted.', 409);
+        }
+
+        $user_id = checkAuthentication();
+        $sql = "DELETE FROM payroll WHERE id = ? AND status = 'archived' AND storage_deleted_at IS NOT NULL";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            sendError('Failed to prepare permanent payroll deletion.', 500);
+        }
+        $stmt->bind_param('i', $payroll_id);
+        if (!$stmt->execute()) {
+            error_log($conn->error);
+            sendError('Failed to permanently delete payroll record.', 500);
+        }
+        $deleted = $stmt->affected_rows;
+        $stmt->close();
+        if ($deleted !== 1) {
+            sendError('Payroll record was not found in Data Storage.', 404);
+        }
+
+        if ($user_id) {
+            releaseSessionLock();
+            logActivity($conn, $user_id, 'permanently_delete_archived_payroll', "Permanently deleted archived payroll ID: $payroll_id", 'payroll_management');
+            logAuditTrail($conn, $user_id, 'payroll', $payroll_id, 'permanent_delete', $record, null, basename(__FILE__));
+        }
+
+        sendResponse(true, null, 'Archived payroll record permanently deleted.');
+    }
+
+    if ($record['status'] !== 'draft' && $record['status'] !== 'archived') {
+        sendError('Only draft or archived payroll records can be deleted', 400);
     }
     if ($record['status'] === 'archived' && !$permanent) {
         if (!empty($record['storage_deleted_at'])) {
