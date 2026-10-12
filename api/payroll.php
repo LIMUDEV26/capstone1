@@ -431,8 +431,16 @@ function handleBulkStatusUpdate($conn, $data) {
     }
     $updateStmt->close();
 
-    if ($status === 'approved') {
-        $syncIds = sortPayrollIdsForCashAdvanceSync($eligibleIds, $beforeRows);
+    if (in_array($status, ['approved', 'paid'], true)) {
+        // A transition from Paid back to Approved is a correction, not a new
+        // payroll release. Avoid recalculating cash advances for that reversal.
+        $syncCandidates = array_values(array_filter($eligibleIds, static function ($payrollId) use ($beforeRows, $status) {
+            $beforeStatus = strtolower((string)($beforeRows[$payrollId]['status'] ?? ''));
+            if ($status === 'approved' && $beforeStatus === 'paid') return false;
+            if ($status === 'paid' && $beforeStatus === 'archived') return false;
+            return true;
+        }));
+        $syncIds = sortPayrollIdsForCashAdvanceSync($syncCandidates, $beforeRows);
         foreach ($syncIds as $payrollId) {
             syncPayrollCashAdvanceRequests($conn, $payrollId);
         }
@@ -491,9 +499,15 @@ function handleBulkStatusUpdate($conn, $data) {
         'status' => $status,
     ];
 
-    if ($status === 'approved') {
-        sendResponseAndContinue(true, $responseData, $message, 200, function () use ($conn, $eligibleIds) {
-            sendPayslipReleaseEmails($conn, $eligibleIds);
+    $releasedIds = array_values(array_filter($eligibleIds, static function ($payrollId) use ($beforeRows) {
+        return strtolower((string)($beforeRows[$payrollId]['status'] ?? '')) !== 'archived';
+    }));
+    if ($status === 'approved' || ($status === 'paid' && !empty($releasedIds))) {
+        if ($status === 'paid') {
+            $message = 'Payslip released and payroll marked as paid.';
+        }
+        sendResponseAndContinue(true, $responseData, $message, 200, function () use ($conn, $releasedIds) {
+            sendPayslipReleaseEmails($conn, $releasedIds);
         });
     }
 
@@ -1022,6 +1036,7 @@ function handlePut($conn) {
     $isArchiveTransition = $statusOnlyRequest && $requestedStatus === 'archived' && $currentStatus !== 'archived';
     $isRestoreTransition = $statusOnlyRequest && $currentStatus === 'archived' && $requestedStatus === 'paid';
     $isMarkPaidTransition = $statusOnlyRequest && $currentStatus !== 'paid' && $currentStatus !== 'archived' && $requestedStatus === 'paid';
+    $isRevertPaidTransition = $statusOnlyRequest && $currentStatus === 'paid' && $requestedStatus === 'approved';
 
     if ($statusOnlyRequest && $currentStatus === 'archived' && $requestedStatus === 'archived') {
         sendResponse(true, ['status' => 'archived'], 'Payroll record is already archived.');
@@ -1033,7 +1048,7 @@ function handlePut($conn) {
         sendError('Only paid payroll records can be archived.', 400);
     }
 
-    if ($isArchiveTransition || $isRestoreTransition || $isMarkPaidTransition) {
+    if ($isArchiveTransition || $isRestoreTransition || $isMarkPaidTransition || $isRevertPaidTransition) {
         $statusStmt = $conn->prepare("UPDATE payroll SET status = ?, archived_at = CASE WHEN ? = 'archived' THEN NOW() WHEN ? = 'paid' AND status = 'archived' THEN NULL ELSE archived_at END WHERE id = ?");
         if (!$statusStmt) sendError('Failed to prepare payroll archive update.', 500);
         $statusStmt->bind_param('sssi', $requestedStatus, $requestedStatus, $requestedStatus, $payroll_id);
@@ -1052,21 +1067,38 @@ function handlePut($conn) {
             $afterStmt->close();
         }
 
+        if ($isMarkPaidTransition) {
+            syncPayrollCashAdvanceRequests($conn, $payroll_id);
+        }
+
         if ($userId = checkAuthentication()) {
             releaseSessionLock();
-            $action = $isArchiveTransition ? 'archive_payroll' : ($isRestoreTransition ? 'restore_payroll' : 'mark_paid_payroll');
+            $action = $isArchiveTransition ? 'archive_payroll' : ($isRestoreTransition ? 'restore_payroll' : ($isRevertPaidTransition ? 'revert_paid_payroll' : 'release_payroll'));
             $description = $isArchiveTransition
                 ? "Archived payroll ID: {$payroll_id}"
-                : ($isRestoreTransition ? "Restored payroll ID: {$payroll_id} as paid" : "Marked payroll ID: {$payroll_id} as paid");
+                : ($isRestoreTransition
+                    ? "Restored payroll ID: {$payroll_id} as paid"
+                    : ($isRevertPaidTransition
+                        ? "Reverted payroll ID: {$payroll_id} from paid to approved"
+                        : "Released payslip and marked payroll ID: {$payroll_id} as paid"));
             logActivity($conn, $userId, $action, $description, 'payroll_management');
             logAuditTrail($conn, $userId, 'payroll', $payroll_id, 'update', $current, $after, basename(__FILE__));
         }
 
-        sendResponse(
-            true,
-            ['status' => $requestedStatus],
-            $isArchiveTransition ? 'Payroll record archived successfully.' : ($isRestoreTransition ? 'Payroll record restored as paid successfully.' : 'Payroll record marked as paid successfully.')
-        );
+        $responseData = ['status' => $requestedStatus];
+        $responseMessage = $isArchiveTransition
+            ? 'Payroll record archived successfully.'
+            : ($isRestoreTransition
+                ? 'Payroll record restored as paid successfully.'
+                : ($isRevertPaidTransition
+                    ? 'Payroll status reverted to approved successfully.'
+                    : 'Payslip released and payroll record marked as paid successfully.'));
+        if ($isMarkPaidTransition) {
+            sendResponseAndContinue(true, $responseData, $responseMessage, 200, function () use ($conn, $payroll_id) {
+                sendPayslipReleaseEmails($conn, [$payroll_id]);
+            });
+        }
+        sendResponse(true, $responseData, $responseMessage);
     }
 
     // Auto-calculate government deductions from settings when values are empty/zero.

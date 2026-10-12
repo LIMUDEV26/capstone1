@@ -638,7 +638,6 @@ export default function PayrollManagement() {
         () => filtered.filter(record => selectedIdSet.has(Number(record.id))),
         [filtered, selectedIdSet]
     );
-    const hasPayableSelection = selectedRecords.some(record => record.status !== 'paid' && record.status !== 'archived');
     const hasReleasableSelection = selectedRecords.some(
         record => record.status !== 'approved' && record.status !== 'paid' && record.status !== 'archived'
     );
@@ -966,7 +965,7 @@ export default function PayrollManagement() {
             ? 'revert to approved'
             : isRestoreFromArchive
             ? 'restore'
-            : nextStatus === 'approved'
+            : nextStatus === 'approved' || nextStatus === 'paid'
             ? 'release'
             : nextStatus === 'draft'
                 ? 'unrelease'
@@ -977,7 +976,7 @@ export default function PayrollManagement() {
             ? 'Revert to Approved'
             : isRestoreFromArchive
             ? 'Restore Payroll'
-            : nextStatus === 'approved'
+            : nextStatus === 'approved' || nextStatus === 'paid'
             ? 'Release payslip'
             : nextStatus === 'draft'
                 ? 'Unrelease payslip'
@@ -988,12 +987,10 @@ export default function PayrollManagement() {
             ? 'Revert to Approved'
             : isRestoreFromArchive
             ? 'Restore'
-            : nextStatus === 'approved'
+            : nextStatus === 'approved' || nextStatus === 'paid'
             ? 'Release Payslip'
             : nextStatus === 'draft'
                 ? 'Unrelease Payslip'
-            : nextStatus === 'paid'
-                ? 'Mark as Paid'
                 : 'Archive';
         const actionIcon = nextStatus === 'archived' ? 'warning' : 'question';
         const actionDanger = nextStatus === 'archived';
@@ -1006,12 +1003,12 @@ export default function PayrollManagement() {
             ? (mode === 'single'
                 ? 'This will restore the selected archived payroll record and return it to active records as paid.'
                 : `This will restore ${targetIds.length} archived payroll record(s) and return them to active records as paid.`)
-            : nextStatus === 'approved'
+            : nextStatus === 'approved' || nextStatus === 'paid'
             ? (mode === 'single'
-                ? 'This will release the selected payslip and make it available to the employee.'
+                ? 'This will release the selected payslip, make it available to the employee, and mark the payroll as paid.'
                 : isAlphabetical
-                    ? `This will release ${targetIds.length} payslip(s) in A-Z order by last name and make them available to employees.`
-                    : `This will release ${targetIds.length} selected payslip(s) and make them available to employees.`)
+                    ? `This will release ${targetIds.length} payslip(s) in A-Z order by last name, make them available to employees, and mark the payroll as paid.`
+                    : `This will release ${targetIds.length} selected payslip(s), make them available to employees, and mark the payroll as paid.`)
             : nextStatus === 'draft'
                 ? (mode === 'single'
                     ? 'This will unrelease the selected payslip and hide it from the employee.'
@@ -1104,7 +1101,7 @@ export default function PayrollManagement() {
                         : nextStatus === 'draft'
                             ? 'Payslip unreleased.'
                             : nextStatus === 'paid'
-                                ? 'Payroll marked as paid.'
+                                ? 'Payslip released and payroll marked as paid.'
                                 : 'Payroll archived.');
             if (usesBulkLoadingAlert) {
                 const completedTitle = isBulkRestoreOperation
@@ -1792,20 +1789,11 @@ export default function PayrollManagement() {
                                                     void updatePayrollStatus(selectedUnreleaseIds, 'draft', 'bulk');
                                                     return;
                                                 }
-                                                void updatePayrollStatus(selectedReleaseIdsSorted, 'approved', 'bulk');
+                                                void updatePayrollStatus(selectedReleaseIdsSorted, 'paid', 'bulk');
                                             }}
                                         >
                                             <CrudActionIcon action={allSelectedApproved ? 'cancel' : 'approve'} />
                                             {allSelectedApproved ? 'Unrelease Payslip' : 'Release Payslip'}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className={s.bulkBtn}
-                                            disabled={!hasPayableSelection}
-                                            onClick={() => void updatePayrollStatus(selectedIds, 'paid', 'bulk')}
-                                        >
-                                            <CrudActionIcon action="approve" />
-                                            Mark Paid
                                         </button>
                                         <button
                                             type="button"
@@ -1965,17 +1953,6 @@ export default function PayrollManagement() {
                                                             >
                                                                 Edit
                                                             </button>
-                                                            {r.status !== 'paid' && r.status !== 'archived' && (
-                                                            <button
-                                                                type="button"
-                                                                className={`${s.actionMenuItem} ${s.actionMenuItemSuccess}`}
-                                                                disabled={rowBusy}
-                                                                role="menuitem"
-                                                                onClick={() => { setOpenActionsId(null); void updatePayrollStatus([r.id], 'paid', 'single'); }}
-                                                            >
-                                                                Mark as Paid
-                                                            </button>
-                                                            )}
                                                             {r.status === 'paid' && (
                                                             <button
                                                                 type="button"
