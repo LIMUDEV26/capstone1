@@ -1337,7 +1337,7 @@ function handleImport($conn) {
         if (!empty($incompletePayrollEmployees)) {
             $count = count($incompletePayrollEmployees);
             $label = $count === 1 ? 'employee has' : 'employees have';
-            $warningsList[] = "$count $label incomplete payroll requirements. Review Employees → Payroll Readiness.";
+            $warningsList[] = "$count $label incomplete payroll requirements. This is informational only and does not block payroll generation or payslip release. Review Employees → Payroll Readiness when convenient.";
         }
         if (!empty($duplicatePayrollEmployees)) {
             $duplicateCount = count($duplicatePayrollEmployees);
