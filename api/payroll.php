@@ -605,7 +605,7 @@ function handleGet($conn) {
                 WHERE p.id = ?";
 
         $sql .= $storageDeletedOnly
-            ? " AND p.storage_deleted_at IS NOT NULL AND p.status = 'archived'"
+            ? " AND p.storage_deleted_at IS NOT NULL"
             : " AND p.storage_deleted_at IS NULL";
 
         if ($restrictToReleased) {
@@ -668,7 +668,7 @@ function handleGet($conn) {
                 WHERE 1=1";
 
         $sql .= $storageDeletedOnly
-            ? " AND p.storage_deleted_at IS NOT NULL AND p.status = 'archived'"
+            ? " AND p.storage_deleted_at IS NOT NULL"
             : " AND p.storage_deleted_at IS NULL";
         
         $params = [];
@@ -680,7 +680,7 @@ function handleGet($conn) {
             $types .= 'i';
         }
         
-        if ($status && $status !== 'all') {
+        if (!$storageDeletedOnly && $status && $status !== 'all') {
             $status = normalizePayrollStatus($status, 'draft', true);
             $allowedReleasedStatuses = $include_archived
                 ? ['approved', 'paid', 'archived']
@@ -691,9 +691,9 @@ function handleGet($conn) {
             $sql .= " AND p.status = ?";
             $params[] = $status;
             $types .= 's';
-        } elseif ($restrictToReleased) {
+        } elseif (!$storageDeletedOnly && $restrictToReleased) {
             $sql .= " AND p.status IN $releasedStatusesSql";
-        } elseif (!$include_archived) {
+        } elseif (!$storageDeletedOnly && !$include_archived) {
             $sql .= " AND (p.status IS NULL OR p.status <> 'archived')";
         }
 

@@ -418,8 +418,9 @@ export default function DataDeletionSettingsPage() {
                 subtitle: 'Archived payroll records',
                 emptyText: 'No archived payroll records available to restore.',
                 load: async () => {
-                    const payload = await requestJson<Record<string, unknown>[]>(`${API_BASE}/payroll.php?status=archived&include_archived=1&storage_deleted=1`);
-                    if (!payload.success || !Array.isArray(payload.data)) return [];
+                    const payload = await requestJson<Record<string, unknown>[]>(`${API_BASE}/payroll.php?storage_deleted=1`);
+                    if (!payload.success) throw new Error(getMessage(payload, 'Failed to load archived payroll records.'));
+                    if (!Array.isArray(payload.data)) throw new Error('The payroll storage response was invalid.');
                     return payload.data.map((entry) => {
                         const row = objectValue(entry);
                         const id = numberValue(row.id);
