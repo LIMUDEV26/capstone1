@@ -1175,6 +1175,40 @@ export default function PayrollManagement() {
         }
     };
 
+    const deleteArchivedPayroll = async (record: PayrollRecord) => {
+        const employeeName = record.full_employee_name || record.employee_name || 'this employee';
+        const confirmed = await confirmAction({
+            title: 'Delete payroll record permanently?',
+            text: `This permanently deletes ${employeeName}'s archived payroll record for ${record.pay_period_start} to ${record.pay_period_end}. You can then import this employee's attendance for that period again.`,
+            confirmButtonText: 'Delete permanently',
+            icon: 'warning',
+            danger: true,
+        });
+        if (!confirmed) return;
+
+        updateBusyIds(setUpdatingIds, [record.id], true);
+        try {
+            const res = await fetch(`${API}/payroll.php?id=${encodeURIComponent(String(record.id))}`, {
+                method: 'DELETE',
+                headers: { 'X-No-Toast': '1' },
+                credentials: 'include',
+            });
+            const d = await res.json();
+            if (!res.ok || !d.success) {
+                throw new Error(d.message || `Failed to delete payroll record (${res.status}).`);
+            }
+
+            setRecords(prev => prev.filter(item => Number(item.id) !== Number(record.id)));
+            setSelectedIds(prev => prev.filter(id => Number(id) !== Number(record.id)));
+            setViewRecord(prev => Number(prev?.id) === Number(record.id) ? null : prev);
+            void notifySuccess(d.message || 'Payroll record deleted permanently.');
+        } catch (error) {
+            void notifyError(error instanceof Error ? error.message : 'Failed to delete payroll record.');
+        } finally {
+            updateBusyIds(setUpdatingIds, [record.id], false);
+        }
+    };
+
     const toggleArchiveStorageView = () => {
         setActiveTab('records');
         setSelectedIds([]);
@@ -1910,7 +1944,7 @@ export default function PayrollManagement() {
                                                             return;
                                                         }
                                                         const rect = event.currentTarget.getBoundingClientRect();
-                                                        const menuHeight = r.status === 'archived' ? 124 : 174;
+                                                        const menuHeight = r.status === 'archived' ? 166 : 174;
                                                         const menuTop = rect.bottom + 4 + menuHeight <= window.innerHeight - 8
                                                             ? rect.bottom + 4
                                                             : Math.max(8, rect.top - menuHeight - 4);
@@ -1961,15 +1995,26 @@ export default function PayrollManagement() {
                                                             </button>
                                                             )}
                                                             {r.status === 'archived' && (
-                                                            <button
-                                                                type="button"
-                                                                className={`${s.actionMenuItem} ${s.actionMenuItemSuccess}`}
-                                                                disabled={rowBusy}
-                                                                role="menuitem"
-                                                                onClick={() => { setOpenActionsId(null); void updatePayrollStatus([r.id], 'paid', 'single', r.status); }}
-                                                            >
-                                                                Restore
-                                                            </button>
+                                                            <>
+                                                                <button
+                                                                    type="button"
+                                                                    className={`${s.actionMenuItem} ${s.actionMenuItemSuccess}`}
+                                                                    disabled={rowBusy}
+                                                                    role="menuitem"
+                                                                    onClick={() => { setOpenActionsId(null); void updatePayrollStatus([r.id], 'paid', 'single', r.status); }}
+                                                                >
+                                                                    Restore
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    className={`${s.actionMenuItem} ${s.actionMenuItemDanger}`}
+                                                                    disabled={rowBusy}
+                                                                    role="menuitem"
+                                                                    onClick={() => { setOpenActionsId(null); void deleteArchivedPayroll(r); }}
+                                                                >
+                                                                    Delete permanently
+                                                                </button>
+                                                            </>
                                                             )}
                                                         </>}
                                                     </div>
