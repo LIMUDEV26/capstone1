@@ -17,6 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libjpeg62-turbo-dev \
       libfreetype6-dev \
       libonig-dev \
+      python3 \
+      python3-xlrd \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j"$(nproc)" mysqli pdo_mysql mbstring fileinfo zip gd opcache \
     && rm -f /etc/apache2/mods-enabled/mpm_*.load /etc/apache2/mods-enabled/mpm_*.conf \
@@ -30,6 +32,7 @@ WORKDIR /var/www/html
 COPY --from=frontend-build /app/out/ ./out/
 COPY .htaccess ./.htaccess
 COPY api/ ./capstone1/api/
+COPY scripts/convert_xls_to_csv.py ./capstone1/scripts/convert_xls_to_csv.py
 COPY vendor/ ./capstone1/vendor/
 COPY docker/api.htaccess.prod ./capstone1/api/.htaccess
 COPY docker/uploads.htaccess.prod /usr/local/share/llb/uploads.htaccess
