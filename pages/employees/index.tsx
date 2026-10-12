@@ -854,6 +854,36 @@ export default function EmployeesPage() {
         }
     };
 
+    const removeArchivedEmployee = async (row: EmployeeRow) => {
+        const label = `${row.first_name} ${row.last_name}`.trim() || 'this employee';
+        const ok = await confirmAction({
+            title: `Move ${label} to Data Storage?`,
+            text: 'The employee will leave Archived Employees and can be restored later from Settings > Data Storage. Employee and payroll history will be kept.',
+            confirmButtonText: 'Move to Data Storage',
+            cancelButtonText: 'Cancel',
+            icon: 'warning',
+        });
+        if (!ok) return;
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/employees.php`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ employee_id: row.employee_id, remove_to_storage: true }),
+            });
+            const data = await res.json();
+            if (!data.success) {
+                setError(data.message || 'Failed to move employee to Data Storage.');
+                return;
+            }
+            setSuccess(data.message || 'Employee moved to Data Storage.');
+            await fetchEmployees();
+        } catch {
+            setError('Network error while moving employee to Data Storage.');
+        }
+    };
+
     const archiveAllEmployees = async () => {
         if (activeRows.length === 0) return;
         const ok = await confirmAction({
@@ -1212,6 +1242,21 @@ export default function EmployeesPage() {
                                                         <svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'>
                                                             <polyline points='1 4 1 10 7 10'></polyline>
                                                             <path d='M3.51 15a9 9 0 1 0 2.13-9.36L1 10'></path>
+                                                        </svg>
+                                                    </button>
+                                                )}
+                                                {isAdmin && canRestore && (
+                                                    <button
+                                                        onClick={() => removeArchivedEmployee(row)}
+                                                        style={actionBtnArchive}
+                                                        title="Move to Data Storage"
+                                                        aria-label={`Move ${row.first_name} ${row.last_name} to Data Storage`}
+                                                    >
+                                                        <svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'>
+                                                            <path d='M3 6h18'></path>
+                                                            <path d='M8 6V4h8v2'></path>
+                                                            <path d='m19 6-1 14H6L5 6'></path>
+                                                            <path d='M10 11v5M14 11v5'></path>
                                                         </svg>
                                                     </button>
                                                 )}

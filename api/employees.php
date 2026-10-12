@@ -13,7 +13,7 @@ setCORSHeaders();
 
 $method = getRequestMethod();
 $conn = getDBConnection();
-runRuntimeSchemaUpgradeOnce('employees_schema_v20260410', function () use ($conn) {
+runRuntimeSchemaUpgradeOnce('employees_schema_v20261012_storage', function () use ($conn) {
     ensureEmployeeSchema($conn);
     ensureTableIndex(
         $conn,
@@ -64,6 +64,7 @@ function employeesEnsureColumn($conn, $table, $column, $definition) {
 }
 
 function ensureEmployeeSchema($conn) {
+    employeesEnsureColumn($conn, 'employees', 'storage_deleted_at', '`storage_deleted_at` DATETIME NULL');
     employeesEnsureColumn($conn, 'employees', 'department', '`department` VARCHAR(100) NULL');
     employeesEnsureColumn($conn, 'employees', 'employment_type', "`employment_type` VARCHAR(50) NOT NULL DEFAULT 'Full-Time'");
     employeesEnsureColumn($conn, 'employees', 'salary', '`salary` DECIMAL(12,2) NOT NULL DEFAULT 0.00');
@@ -1120,11 +1121,18 @@ function handleGet($conn) {
         $employee_id = $selfEmployeeId;
     }
 
+    $storageDeleted = !empty($_GET['storage_deleted']);
+    if ($storageDeleted && $role !== 'admin') {
+        sendError('Only administrators can view employee records in Data Storage.', 403);
+    }
+
     if ($employee_id !== null && $employee_id <= 0) {
         sendError('Invalid employee ID.', 400);
     }
 
-    $sql = getEmployeeSelectSql() . " WHERE 1=1";
+    $sql = getEmployeeSelectSql() . ($storageDeleted
+        ? " WHERE e.storage_deleted_at IS NOT NULL"
+        : " WHERE e.storage_deleted_at IS NULL");
     $params = [];
     $types = '';
 
@@ -1429,6 +1437,30 @@ function handlePost($conn) {
  */
 function handlePut($conn) {
     $data = getJSONInput();
+
+    if (!empty($data['remove_to_storage']) || !empty($data['restore_from_storage'])) {
+        $employeeId = intval($data['employee_id'] ?? 0);
+        if ($employeeId <= 0) sendError('Valid employee ID is required.', 400);
+
+        $isRestore = !empty($data['restore_from_storage']);
+        $condition = $isRestore ? 'storage_deleted_at IS NOT NULL' : "status = 'inactive' AND storage_deleted_at IS NULL";
+        $stmt = $conn->prepare("UPDATE employees SET storage_deleted_at = " . ($isRestore ? 'NULL' : 'NOW()') . " WHERE employee_id = ? AND $condition");
+        if (!$stmt) sendError('Failed to prepare employee storage action.', 500);
+        $stmt->bind_param('i', $employeeId);
+        $stmt->execute();
+        $changed = $stmt->affected_rows;
+        $stmt->close();
+
+        if ($changed < 1) {
+            sendError($isRestore
+                ? 'Employee was not found in Data Storage.'
+                : 'Only archived employees can be moved to Data Storage.', 409);
+        }
+
+        sendResponse(true, ['employee_id' => $employeeId], $isRestore
+            ? 'Employee restored to Archived Employees.'
+            : 'Employee moved to Data Storage and can be restored later.');
+    }
 
     if (!isset($data['employee_id'])) {
         sendError('Employee ID is required', 400);

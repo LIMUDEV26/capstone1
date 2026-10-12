@@ -39,6 +39,7 @@ type DeletionItem = {
 };
 
 type ResourceKey =
+    | 'employees'
     | 'users'
     | 'branches'
     | 'clients'
@@ -117,6 +118,7 @@ const formatReadableValue = (value?: string | null, fallback = '-') => {
 };
 
 const RESOURCE_ORDER: ResourceKey[] = [
+    'employees',
     'users',
     'branches',
     'clients',
@@ -131,6 +133,7 @@ const RESOURCE_ORDER: ResourceKey[] = [
 ];
 
 const createInitialSections = (): Record<ResourceKey, SectionState> => ({
+    employees: { loading: false, items: [], deletingId: null, error: '' },
     users: { loading: false, items: [], deletingId: null, error: '' },
     branches: { loading: false, items: [], deletingId: null, error: '' },
     clients: { loading: false, items: [], deletingId: null, error: '' },
@@ -145,6 +148,7 @@ const createInitialSections = (): Record<ResourceKey, SectionState> => ({
 });
 
 const createInitialFilters = (): Record<ResourceKey, string> => ({
+    employees: '',
     users: '',
     branches: '',
     clients: '',
@@ -252,6 +256,36 @@ export default function DataDeletionSettingsPage() {
 
     const resources = useMemo<Record<ResourceKey, ResourceConfig>>(
         () => ({
+            employees: {
+                label: 'Employees',
+                subtitle: 'Employees removed from the Archived Employees list',
+                emptyText: 'No removed employees available to restore.',
+                load: async () => {
+                    const payload = await requestJson<Record<string, unknown>[]>(`${API_BASE}/employees.php?storage_deleted=1`);
+                    if (!payload.success || !Array.isArray(payload.data)) throw new Error(getMessage(payload, 'Failed to load employees in Data Storage.'));
+                    return payload.data.map((entry) => {
+                        const row = objectValue(entry);
+                        const id = numberValue(row.employee_id);
+                        const fullName = `${stringValue(row.first_name)} ${stringValue(row.last_name)}`.trim();
+                        const employeeDateId = stringValue(row.employee_date_id);
+                        const email = stringValue(row.email);
+                        return {
+                            id,
+                            title: fullName || `Employee #${id}`,
+                            meta: [employeeDateId ? `Employee ID: ${employeeDateId}` : null, email || null].filter(Boolean).join(' | '),
+                            isArchived: true,
+                            archivedAt: stringValue(row.storage_deleted_at),
+                        };
+                    });
+                },
+                deleteOne: async () => ({ success: false, message: 'Employee deletion is disabled. Restore the employee or leave it in Data Storage.' }),
+                restoreOne: (id: number) =>
+                    requestJson(`${API_BASE}/employees.php`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ employee_id: id, restore_from_storage: true }),
+                    }),
+            },
             users: {
                 label: 'Users',
                 subtitle: 'Inactive accounts',
@@ -822,12 +856,15 @@ export default function DataDeletionSettingsPage() {
 
     const handleDeleteOne = async (key: ResourceKey, item: DeletionItem, operation?: 'restore' | 'delete') => {
         const isRestore = operation ? operation === 'restore' : key === 'activity';
+        const recordLabel = key === 'activity' ? 'activity log' : key === 'payroll' ? 'payroll record' : 'employee';
         const confirmed = await confirmAction({
-            title: isRestore ? `Restore this ${key === 'activity' ? 'activity log' : 'payroll record'}?` : `Delete ${resources[key].label.toLowerCase()} permanently?`,
+            title: isRestore ? `Restore this ${recordLabel}?` : `Delete ${resources[key].label.toLowerCase()} permanently?`,
             text: isRestore
                 ? key === 'activity'
                     ? `${item.title} will be returned to the active activity log.`
-                    : `${item.title} will return to active payroll records with Paid status.`
+                    : key === 'payroll'
+                        ? `${item.title} will return to active payroll records with Paid status.`
+                        : `${item.title} will return to Archived Employees.`
                 : `${item.title} will be deleted permanently. This cannot be undone.`,
             confirmButtonText: isRestore ? 'Restore' : 'Delete Permanently',
             icon: 'warning',
@@ -860,7 +897,7 @@ export default function DataDeletionSettingsPage() {
     };
 
     const handleDeleteAll = async (key: ResourceKey) => {
-        const isRestore = key === 'activity' || key === 'payroll';
+        const isRestore = key === 'activity' || key === 'payroll' || key === 'employees';
         const items = isRestore
             ? sections[key].items.filter((item) => item.isArchived)
             : sections[key].items;
@@ -875,6 +912,8 @@ export default function DataDeletionSettingsPage() {
                 ? 'All archived activity logs will be restored to the active activity log.'
                 : key === 'payroll'
                     ? `All ${items.length} archived payroll record(s) will be restored as Paid.`
+                    : key === 'employees'
+                        ? `All ${items.length} employee record(s) will return to Archived Employees.`
                     : bulkDelete
                 ? `Every ${resources[key].label.toLowerCase()} record will be permanently deleted. This cannot be undone.`
                 : `${items.length} record(s) will be permanently deleted. This cannot be undone.`,
@@ -935,7 +974,7 @@ export default function DataDeletionSettingsPage() {
     const activeState = sections[activeResource];
     const activeConfig = resources[activeResource];
     const activeFilter = filters[activeResource];
-    const currentResourceSupportsRestore = activeResource === 'activity' || activeResource === 'payroll';
+    const currentResourceSupportsRestore = activeResource === 'activity' || activeResource === 'payroll' || activeResource === 'employees';
     const currentArchivedCount = activeState.items.filter((item) => item.isArchived).length;
     const filteredItems = activeState.items.filter((item) =>
         `${item.title} ${item.meta}`.toLowerCase().includes(activeFilter.trim().toLowerCase())
@@ -1152,7 +1191,7 @@ export default function DataDeletionSettingsPage() {
                                         >
                                             Refresh
                                         </button>
-                                        {activeResource !== 'activity' && (
+                                        {activeResource !== 'activity' && activeResource !== 'employees' && (
                                             <button
                                                 type="button"
                                                 onClick={() => void handleDeleteAll(activeResource)}
@@ -1327,14 +1366,14 @@ export default function DataDeletionSettingsPage() {
                                                     <td style={{ padding: '10px 16px', textAlign: 'right' }} className="llb-actions">
                                                         {activeResource === 'activity' && !item.isArchived ? (
                                                             <span style={{ color: '#64748b', fontSize: 12, fontWeight: 600 }}>Active</span>
-                                                        ) : activeResource === 'activity' || activeResource === 'payroll' ? (
+                                                        ) : activeResource === 'activity' || activeResource === 'payroll' || activeResource === 'employees' ? (
                                                             <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
                                                                 <span style={{ color: '#64748b', fontSize: 12, fontWeight: 600 }}>{inactiveDaysLabel(item.archivedAt)}</span>
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => void handleDeleteOne(activeResource, item, 'restore')}
                                                                     disabled={activeState.deletingId === item.id || deletingAll}
-                                                                    title={`Restore archived ${activeResource === 'payroll' ? 'payroll record' : 'activity log'}`}
+                                                                    title={`Restore archived ${activeResource === 'payroll' ? 'payroll record' : activeResource === 'employees' ? 'employee' : 'activity log'}`}
                                                                     aria-label={`Restore ${item.title}`}
                                                                     style={{ padding: '6px 14px', border: 'none', borderRadius: 8, background: '#1d4ed8', color: 'white', cursor: activeState.deletingId === item.id || deletingAll ? 'default' : 'pointer', opacity: activeState.deletingId === item.id || deletingAll ? 0.6 : 1, fontWeight: 700, fontSize: 12, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                                                                 >
