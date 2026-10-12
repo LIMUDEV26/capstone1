@@ -36,6 +36,9 @@ function resolveEmailBrandLogoPath() {
         $candidates[] = $projectRoot . DIRECTORY_SEPARATOR . ltrim($normalized, DIRECTORY_SEPARATOR);
     }
 
+    // Prefer the compact logo asset for inline email embedding. The full-size
+    // logo.png is several megabytes and may not be copied into production.
+    $candidates[] = $projectRoot . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'logo-ui.webp';
     $candidates[] = $projectRoot . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'logo.png';
     $candidates[] = $projectRoot . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'logo_v2.png';
 

@@ -32,6 +32,7 @@ WORKDIR /var/www/html
 COPY --from=frontend-build /app/out/ ./out/
 COPY .htaccess ./.htaccess
 COPY api/ ./capstone1/api/
+COPY public/logo-ui.webp ./capstone1/public/logo-ui.webp
 COPY scripts/convert_xls_to_csv.py ./capstone1/scripts/convert_xls_to_csv.py
 COPY vendor/ ./capstone1/vendor/
 COPY docker/api.htaccess.prod ./capstone1/api/.htaccess
