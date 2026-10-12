@@ -550,7 +550,9 @@ function ensureLinkedEmployeeForUser($conn, $userId, $salary = 0.00) {
     $existingEmployeeId = findEmployeeIdByEmail($conn, $email);
     if ($existingEmployeeId > 0) return $existingEmployeeId;
 
-    $employeeDateId = generateUniqueID('EMP-');
+    // Do not invent a biometric code. Attendance imports can match this
+    // employee by a unique name until a real device ID is assigned.
+    $employeeDateId = null;
     $firstName = normalizePersonName($snapshot['first_name'] ?? '', 50);
     $lastName = normalizePersonName($snapshot['last_name'] ?? '', 50);
     if ($firstName === '') $firstName = 'Employee';
