@@ -1105,7 +1105,6 @@ export default function Users() {
                             <th style={tableHeaderStyle}>Name</th>
                             <th style={tableHeaderStyle}>Email</th>
                             <th style={tableHeaderStyle}>Branch</th>
-                            <th style={{ ...tableHeaderStyle, textAlign: 'right', whiteSpace: 'nowrap' }} className="llb-num">Salary</th>
                             <th style={tableHeaderStyle}>Role</th>
                             {!showArchiveView && <th style={tableHeaderStyle}>Status</th>}
                             <th style={tableHeaderStyle}>Hired Date</th>
@@ -1114,7 +1113,7 @@ export default function Users() {
                     </thead>
                     <tbody>
                         {displayedUsers.length === 0 ? (
-                            <tr><td colSpan={showArchiveView ? 8 : 9} style={{ padding: '8px', textAlign: 'center', color: '#666' }}>
+                            <tr><td colSpan={showArchiveView ? 7 : 8} style={{ padding: '8px', textAlign: 'center', color: '#666' }}>
                                 {showArchiveView && !searchTerm.trim() ? 'No archived employees.' : (
                                     <ZeroResults
                                         query={searchTerm}
@@ -1160,7 +1159,6 @@ export default function Users() {
                                 </td>
                                 <td style={tableCellStyle} className="llb-trunc" title={u.email}>{u.email}</td>
                                 <td style={tableCellStyle}>{u.branch_name || '-'}</td>
-                                    <td style={{ ...tableCellStyle, textAlign: 'right', whiteSpace: 'nowrap' }} className="llb-num">{formatCurrency(u.salary)}</td>
                                 <td style={tableCellStyle}>
                                     <span style={{
                                         padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold',
