@@ -106,6 +106,105 @@ function normalizeAttendanceHeader($value) {
     return preg_replace('/[^a-z0-9]/', '', $header) ?? $header;
 }
 
+/** Convert a ZKTeco Statistical Report table into the attendance template shape. */
+function convertZktecoStatisticalReportRows($rows) {
+    if (!is_array($rows) || count($rows) < 5) return null;
+
+    $headerIndex = null;
+    $headers = [];
+    foreach ($rows as $rowIndex => $row) {
+        $normalized = array_map('normalizeAttendanceHeader', $row);
+        $hasAttDays = false;
+        foreach ($normalized as $label) {
+            if (str_starts_with($label, 'attdays')) {
+                $hasAttDays = true;
+                break;
+            }
+        }
+        if (in_array('id', $normalized, true)
+            && in_array('name', $normalized, true)
+            && in_array('late', $normalized, true)
+            && in_array('overtimehour', $normalized, true)
+            && in_array('absentday', $normalized, true)
+            && $hasAttDays) {
+            $headerIndex = $rowIndex;
+            $headers = $normalized;
+            break;
+        }
+    }
+    if ($headerIndex === null) return null;
+
+    $subHeaders = array_map('normalizeAttendanceHeader', $rows[$headerIndex + 1] ?? []);
+    $idColumn = array_search('id', $headers, true);
+    $nameColumn = array_search('name', $headers, true);
+    $attDaysColumn = null;
+    $absentDaysColumn = array_search('absentday', $headers, true);
+    $lateMinutesColumn = null;
+    $overtimeColumns = [];
+
+    foreach ($headers as $columnIndex => $label) {
+        if (str_starts_with($label, 'attdays')) $attDaysColumn = $columnIndex;
+        if ($label === 'late' && ($subHeaders[$columnIndex + 1] ?? '') === 'min') {
+            $lateMinutesColumn = $columnIndex + 1;
+        }
+        if ($label === 'overtimehour') {
+            $subLabel = $subHeaders[$columnIndex] ?? '';
+            if (in_array($subLabel, ['workday', 'holiday'], true)) {
+                $overtimeColumns[] = $columnIndex;
+            }
+            if (($subHeaders[$columnIndex + 1] ?? '') === 'holiday') {
+                $overtimeColumns[] = $columnIndex + 1;
+            }
+        }
+    }
+
+    if ($idColumn === false || $nameColumn === false || $attDaysColumn === null
+        || $absentDaysColumn === false || $lateMinutesColumn === null) {
+        return null;
+    }
+
+    $converted = [ATTENDANCE_IMPORT_TEMPLATE_HEADERS];
+    for ($rowIndex = $headerIndex + 2; $rowIndex < count($rows); $rowIndex++) {
+        $row = $rows[$rowIndex];
+        $employeeId = trim((string)($row[$idColumn] ?? ''));
+        $employeeName = trim((string)($row[$nameColumn] ?? ''));
+        if ($employeeId === '' || $employeeName === '') continue;
+
+        // Att. Days is reported as scheduled/actual (for example, 10/9).
+        // Payroll should use the actual days worked, the value after the slash.
+        $attendanceDays = trim((string)($row[$attDaysColumn] ?? '0'));
+        if (preg_match('/^\s*\d+(?:\.\d+)?\s*\/\s*(\d+(?:\.\d+)?)/', $attendanceDays, $matches)) {
+            $daysWorked = $matches[1];
+        } else {
+            $daysWorked = $attendanceDays;
+        }
+
+        $overtimeHours = 0.0;
+        foreach ($overtimeColumns as $columnIndex) {
+            $value = trim((string)($row[$columnIndex] ?? '0'));
+            if (preg_match('/^(\d+(?:\.\d+)?)\s*:\s*(\d{1,2})$/', $value, $matches)) {
+                $overtimeHours += (float)$matches[1] + ((float)$matches[2] / 60);
+            } elseif (is_numeric($value)) {
+                $overtimeHours += (float)$value;
+            }
+        }
+
+        $converted[] = [
+            $employeeId,
+            $employeeName,
+            '',
+            '',
+            $daysWorked,
+            (string)$overtimeHours,
+            trim((string)($row[$lateMinutesColumn] ?? '0')),
+            trim((string)($row[$absentDaysColumn] ?? '0')),
+            '0',
+        ];
+    }
+
+    return count($converted) > 1 ? $converted : null;
+}
+
 /** Convert ZKTeco Card Report's multi-row, side-by-side employee totals into the attendance template shape. */
 function convertZktecoCardReportRows($rows) {
     if (!is_array($rows) || count($rows) < 4) return null;
@@ -172,10 +271,24 @@ function convertZktecoCardReportRows($rows) {
         $employeeId = trim((string)($idHeaderRow[$idColumn + 1] ?? ''));
         if ($employeeId === '') continue;
 
-        $daysWorked = trim((string)($summaryRow[$blockStart + 3] ?? '0'));
-        $overtimeHours = floatval($summaryRow[$blockStart + 4] ?? 0)
-            + floatval($summaryRow[$blockStart + 5] ?? 0);
-        $lateMinutes = trim((string)($summaryRow[$blockStart + 7] ?? '0'));
+        // Card Report columns are: Absent, AFL, Out, blank, On-duty,
+        // OT Workday, blank, OT Holiday, Late Times, Late Minutes, ...
+        // The blank spacer columns are part of the export and must be counted.
+        $daysWorked = trim((string)($summaryRow[$blockStart + 4] ?? '0'));
+        $overtimeValues = [
+            $summaryRow[$blockStart + 5] ?? '0',
+            $summaryRow[$blockStart + 7] ?? '0',
+        ];
+        $overtimeHours = 0.0;
+        foreach ($overtimeValues as $overtimeValue) {
+            $overtimeValue = trim((string)$overtimeValue);
+            if (preg_match('/^(\d+(?:\.\d+)?)\s*:\s*(\d{1,2})$/', $overtimeValue, $timeParts)) {
+                $overtimeHours += (float)$timeParts[1] + ((float)$timeParts[2] / 60);
+            } elseif (is_numeric($overtimeValue)) {
+                $overtimeHours += (float)$overtimeValue;
+            }
+        }
+        $lateMinutes = trim((string)($summaryRow[$blockStart + 9] ?? '0'));
 
         $converted[] = [
             $employeeId,
@@ -837,9 +950,14 @@ function handleImport($conn) {
     } else {
         $rows = parseXlsx($file['tmp_name']);
     }
-    if ($ext === 'csv') {
-        $cardReportRows = convertZktecoCardReportRows($rows);
-        if ($cardReportRows !== null) $rows = $cardReportRows;
+    if (in_array($ext, ['csv', 'xls', 'xlsx'], true)) {
+        $statisticalReportRows = convertZktecoStatisticalReportRows($rows);
+        if ($statisticalReportRows !== null) {
+            $rows = $statisticalReportRows;
+        } else {
+            $cardReportRows = convertZktecoCardReportRows($rows);
+            if ($cardReportRows !== null) $rows = $cardReportRows;
+        }
     }
     if (empty($rows)) {
         sendError('The uploaded file contains no data rows', 400);
