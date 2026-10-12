@@ -34,8 +34,13 @@ function ensurePayrollAnalyticsSchema($conn) {
 }
 
 function buildPayrollAnalyticsFilter($tableAlias, $periodStart, $periodEnd, $branchId = 0) {
-    $prefix = $tableAlias !== '' ? $tableAlias . '.' : '';
-    $conditions = ["({$prefix}status IS NULL OR {$prefix}status IN ('approved', 'paid', 'archived'))"];
+    $prefix = $tableAlias !== '' ? $tableAlias . '.' : 'payroll.';
+    // Active dashboard totals exclude archived payslips and inactive employees.
+    $conditions = [
+        "({$prefix}status IS NULL OR {$prefix}status IN ('approved', 'paid'))",
+        "EXISTS (SELECT 1 FROM employees active_employee WHERE active_employee.employee_id = {$prefix}employee_id AND active_employee.status = 'active')",
+        "NOT EXISTS (SELECT 1 FROM users archived_user WHERE archived_user.employee_id = {$prefix}employee_id AND archived_user.status = 'inactive')",
+    ];
     $params = [];
     $types = '';
 
@@ -120,9 +125,14 @@ if ($method === 'GET') {
     
     // 1. KPI Cards
     // Headcount (Active employees)
-    $headcount_sql = "SELECT COUNT(*) as count FROM employees WHERE status = 'active'";
+    $headcount_sql = "SELECT COUNT(*) as count FROM employees e
+                      WHERE e.status = 'active'
+                        AND NOT EXISTS (
+                            SELECT 1 FROM users u
+                            WHERE u.employee_id = e.employee_id AND u.status = 'inactive'
+                        )";
     if ($branch_id > 0) {
-        $headcount_sql .= " AND branch_id = ?";
+        $headcount_sql .= " AND e.branch_id = ?";
         $headcountRow = executeAnalyticsPreparedRow($conn, $headcount_sql, 'i', [$branch_id]);
     } else {
         $headcountResult = $conn->query($headcount_sql);

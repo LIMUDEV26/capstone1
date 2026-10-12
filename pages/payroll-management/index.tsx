@@ -2072,7 +2072,7 @@ export default function PayrollManagement() {
                         Payroll Analytics
                     </h2>
                     <div style={{ marginTop: '-8px', marginBottom: '16px', color: '#64748b', fontSize: '13px' }}>
-                        Includes approved, paid, and archived payroll records{periodStart || periodEnd ? ' within the selected period.' : '.'} Deduction analytics are calculated company-wide from each payroll deduction column. Current branch scope: {analyticsBranchLabel}.
+                        Includes approved and paid payroll records for active employees{periodStart || periodEnd ? ' within the selected period.' : '.'} Archived payroll and inactive or removed employees are excluded. Deduction analytics are calculated company-wide from each payroll deduction column. Current branch scope: {analyticsBranchLabel}.
                     </div>
                     <div className={s.toolbarRow}>
                         <div className={s.filtersBar} style={{ gridTemplateColumns: 'minmax(220px, 320px)', maxWidth: 320 }}>
