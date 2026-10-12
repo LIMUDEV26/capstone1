@@ -628,46 +628,33 @@ function resolveImportedEmployee($employeeDirectory, $base44Mappings, $sourceSys
         ];
     }
 
-    // A registered ID must belong to the same employee as the exact name.
-    // Never redirect a registered ID to another person based on their name.
+    // The exact, unique employee name is authoritative when device IDs differ
+    // from the IDs stored in the employee profile. This supports changed IDs
+    // while still ensuring that the row maps only to an existing employee.
+    $uniqueNameMatches = $employeeDirectory['by_name'][$externalNameKey] ?? [];
     $idMatches = $employeeDirectory['by_date_id'][$externalCodeKey] ?? [];
-    if (count($idMatches) === 1) {
-        $employee = $idMatches[0];
-        if ($employee['normalized_full_name'] === $externalNameKey) {
-            return buildResolvedEmployeeMatch(
-                $employee,
-                'employee_date_id_match',
-                'Biometric ID and employee name matched',
-                1.0,
-                ['EmployeeID and EmployeeName both matched the same employee record']
-            );
-        }
-        return [
-            'ok' => false,
-            'message' => 'The uploaded EmployeeID belongs to "' . $employee['name'] . '", but the uploaded name does not match that employee. This row was skipped to avoid assigning attendance to the wrong person.',
-        ];
-    }
-    if (count($idMatches) > 1) {
-        return ['ok' => false, 'message' => 'This EmployeeID is assigned to more than one employee record, so the row was skipped.'];
+    if (count($uniqueNameMatches) === 1) {
+        $employee = $uniqueNameMatches[0];
+        $idMatchesSameEmployee = count($idMatches) === 1
+            && intval($idMatches[0]['employee_id'] ?? 0) === intval($employee['employee_id'] ?? 0);
+        return buildResolvedEmployeeMatch(
+            $employee,
+            $idMatchesSameEmployee ? 'employee_date_id_match' : 'smart_name_match',
+            $idMatchesSameEmployee ? 'Biometric ID and employee name matched' : 'Exact employee name matched; attendance ID differs',
+            $idMatchesSameEmployee ? 1.0 : 0.96,
+            $idMatchesSameEmployee
+                ? ['EmployeeID and EmployeeName matched the same employee record']
+                : ['File EmployeeName uniquely matched an existing employee; file EmployeeID ' . $externalEmployeeCode . ' was not used as the employee identity']
+        );
     }
 
-    // A changed/unregistered device ID may still be imported when the exact
-    // name uniquely matches an employee already in the system. This does not
-    // create employees or accept fuzzy, mapped, or ambiguous name matches.
-    $uniqueNameMatches = $employeeDirectory['by_name'][$externalNameKey] ?? [];
-    if (count($uniqueNameMatches) === 1) {
-        return buildResolvedEmployeeMatch(
-            $uniqueNameMatches[0],
-            'smart_name_match',
-            'Unregistered EmployeeID; exact employee name matched',
-            0.96,
-            ['EmployeeID is not registered; exact unique EmployeeName matched an existing employee']
-        );
+    if (count($idMatches) > 1) {
+        return ['ok' => false, 'message' => 'The EmployeeID is assigned to multiple employees, and the name does not uniquely match an existing employee. This row was skipped.'];
     }
 
     return [
         'ok' => false,
-        'message' => 'The EmployeeID is not registered and the EmployeeName does not uniquely match an existing employee. This row was skipped.',
+        'message' => 'The uploaded EmployeeName does not uniquely match an existing employee. This row was skipped, even though its EmployeeID is present.',
     ];
 }
 function attendanceImportUserId() {
@@ -1088,7 +1075,7 @@ function handleImport($conn) {
                 $externalEmployeeCode,
                 $sourceNameForDetails,
                 'matched_via_smart_name',
-                'File name matched registered employee "' . $employee['name'] . '" (#' . $employeeId . ').',
+                'File EmployeeID "' . $externalEmployeeCode . '" was matched by the exact unique file name to existing employee "' . $employee['name'] . '" (#' . $employeeId . ').',
                 $employeeId
             );
         } else {
