@@ -969,8 +969,6 @@ export default function PayrollManagement() {
             ? 'release'
             : nextStatus === 'draft'
                 ? 'unrelease'
-            : nextStatus === 'paid'
-                ? 'mark as paid'
                 : 'archive';
         const actionTitle = isRevertPaid
             ? 'Revert to Approved'
@@ -980,8 +978,6 @@ export default function PayrollManagement() {
             ? 'Release payslip'
             : nextStatus === 'draft'
                 ? 'Unrelease payslip'
-            : nextStatus === 'paid'
-                ? 'Mark payroll as paid'
                 : 'Archive payroll';
         const actionButton = isRevertPaid
             ? 'Revert to Approved'
