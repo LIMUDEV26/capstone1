@@ -275,7 +275,262 @@ function sendMailViaHttpsRelay($relayUrl, $relaySecret, $toEmail, $toName, $subj
     return $ok;
 }
 
+/** Send through Gmail's REST API using OAuth refresh-token credentials. */
+function sendMailViaGmailApi($toEmail, $toName, $subject, $htmlBody, $altBody, $attachments, $cc) {
+    $clientId = trim((string)(getenv('GOOGLE_OAUTH_CLIENT_ID') ?: ''));
+    $clientSecret = trim((string)(getenv('GOOGLE_OAUTH_CLIENT_SECRET') ?: ''));
+    $refreshToken = trim((string)(getenv('GMAIL_API_REFRESH_TOKEN') ?: ''));
+    $fromEmail = trim((string)(getenv('SMTP_FROM_EMAIL') ?: getenv('SMTP_USERNAME') ?: getenv('GMAIL_USERNAME') ?: ''));
+    $fromName = trim((string)(getenv('SMTP_FROM_NAME') ?: 'LLB Accountants'));
+    if ($clientId === '' || $clientSecret === '' || $refreshToken === '' || !filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
+        error_log('Gmail API mail failed: configure Google OAuth client credentials, GMAIL_API_REFRESH_TOKEN, and a valid SMTP_FROM_EMAIL.');
+        return false;
+    }
+
+    $postForm = static function ($url, array $fields) {
+        $context = stream_context_create([
+            'http' => [
+                'method' => 'POST',
+                'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
+                'content' => http_build_query($fields),
+                'timeout' => 20,
+                'ignore_errors' => true,
+            ],
+            'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
+        ]);
+        $body = @file_get_contents($url, false, $context);
+        $status = (string)($http_response_header[0] ?? '');
+        return [$body, $status];
+    };
+    [$tokenBody, $tokenStatus] = $postForm('https://oauth2.googleapis.com/token', [
+        'client_id' => $clientId,
+        'client_secret' => $clientSecret,
+        'refresh_token' => $refreshToken,
+        'grant_type' => 'refresh_token',
+    ]);
+    $tokenData = json_decode((string)$tokenBody, true);
+    $accessToken = is_array($tokenData) ? trim((string)($tokenData['access_token'] ?? '')) : '';
+    if ($accessToken === '') {
+        error_log('Gmail API mail failed while refreshing OAuth access token: ' . ($tokenStatus !== '' ? $tokenStatus : 'HTTPS request failed') . '; response=' . substr((string)$tokenBody, 0, 400));
+        return false;
+    }
+
+    $cleanHeader = static function ($value) { return trim(str_replace(["\r", "\n"], '', (string)$value)); };
+    $encodedName = static function ($value) use ($cleanHeader) {
+        $value = $cleanHeader($value);
+        return $value !== '' && function_exists('mb_encode_mimeheader') ? mb_encode_mimeheader($value, 'UTF-8', 'B', "\r\n") : $value;
+    };
+    $formatAddress = static function ($email, $name = '') use ($cleanHeader, $encodedName) {
+        $email = $cleanHeader($email);
+        $name = $encodedName($name);
+        return $name !== '' ? '"' . addcslashes($name, "\\\"") . '" <' . $email . '>' : $email;
+    };
+    $boundaryMixed = 'llb_m_' . bin2hex(random_bytes(12));
+    $boundaryAlt = 'llb_a_' . bin2hex(random_bytes(12));
+    $plainText = (string)$altBody;
+    if ($plainText === '') $plainText = strip_tags((string)preg_replace('/<style\b[^>]*>.*?<\/style>/is', '', $htmlBody));
+    $mime = 'From: ' . $formatAddress($fromEmail, $fromName) . "\r\n";
+    $mime .= 'To: ' . $formatAddress($toEmail, $toName ?: $toEmail) . "\r\n";
+    $ccHeaders = [];
+    foreach ((array)$cc as $entry) {
+        $email = is_array($entry) ? trim((string)($entry['email'] ?? '')) : trim((string)$entry);
+        $name = is_array($entry) ? trim((string)($entry['name'] ?? '')) : '';
+        if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) $ccHeaders[] = $formatAddress($email, $name);
+    }
+    if ($ccHeaders) $mime .= 'Cc: ' . implode(', ', $ccHeaders) . "\r\n";
+    $encodedSubject = function_exists('mb_encode_mimeheader') ? mb_encode_mimeheader($cleanHeader($subject), 'UTF-8', 'B', "\r\n") : $cleanHeader($subject);
+    $mime .= 'Subject: ' . $encodedSubject . "\r\n";
+    $mime .= 'MIME-Version: 1.0' . "\r\n";
+    $mime .= 'Date: ' . gmdate('D, d M Y H:i:s') . ' +0000' . "\r\n";
+    $mime .= 'Auto-Submitted: auto-generated' . "\r\n";
+
+    $embedded = [];
+    $branding = function_exists('getEmailBranding') ? getEmailBranding() : [];
+    $logoPath = trim((string)($branding['logo_path'] ?? ''));
+    $logoCid = trim((string)($branding['logo_cid'] ?? ''));
+    if ($logoPath !== '' && $logoCid !== '' && stripos((string)$htmlBody, 'cid:' . $logoCid) !== false && is_file($logoPath) && is_readable($logoPath)) {
+        $logoContent = file_get_contents($logoPath);
+        if ($logoContent !== false) $embedded[] = ['content' => $logoContent, 'name' => basename($logoPath), 'mime' => function_exists('mime_content_type') ? (string)(mime_content_type($logoPath) ?: 'image/png') : 'image/png', 'cid' => $logoCid];
+    }
+    foreach ((array)$attachments as $attachment) {
+        $content = '';
+        $name = 'attachment';
+        $contentType = 'application/octet-stream';
+        if (is_string($attachment)) {
+            $path = trim($attachment);
+            if ($path === '' || !is_file($path) || !is_readable($path)) continue;
+            $content = (string)file_get_contents($path);
+            $name = basename($path);
+            if (function_exists('mime_content_type')) $contentType = (string)(mime_content_type($path) ?: $contentType);
+        } elseif (is_array($attachment)) {
+            $content = (string)($attachment['content'] ?? '');
+            $name = trim((string)($attachment['name'] ?? 'attachment'));
+            $contentType = trim((string)($attachment['mime'] ?? $contentType));
+            if ($content === '' && !empty($attachment['path'])) {
+                $path = trim((string)$attachment['path']);
+                if (!is_file($path) || !is_readable($path)) continue;
+                $content = (string)file_get_contents($path);
+                if ($name === 'attachment') $name = basename($path);
+                if ($contentType === 'application/octet-stream' && function_exists('mime_content_type')) $contentType = (string)(mime_content_type($path) ?: $contentType);
+            }
+        } else continue;
+        if ($content !== '') $embedded[] = ['content' => $content, 'name' => $name, 'mime' => $contentType, 'cid' => ''];
+    }
+
+    if ($embedded) {
+        $mime .= 'Content-Type: multipart/mixed; boundary="' . $boundaryMixed . '"' . "\r\n\r\n";
+        $mime .= '--' . $boundaryMixed . "\r\nContent-Type: multipart/alternative; boundary=\"{$boundaryAlt}\"\r\n\r\n";
+    } else {
+        $mime .= 'Content-Type: multipart/alternative; boundary="' . $boundaryAlt . '"' . "\r\n\r\n";
+    }
+    $mime .= '--' . $boundaryAlt . "\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n" . chunk_split(base64_encode($plainText)) . "\r\n";
+    $mime .= '--' . $boundaryAlt . "\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n" . chunk_split(base64_encode((string)$htmlBody)) . "\r\n";
+    $mime .= '--' . $boundaryAlt . "--\r\n";
+    if ($embedded) {
+        foreach ($embedded as $file) {
+            $mime .= '--' . $boundaryMixed . "\r\nContent-Type: {$file['mime']}; name=\"" . addcslashes($file['name'], "\\\"") . "\"\r\n";
+            $mime .= 'Content-Disposition: ' . ($file['cid'] !== '' ? 'inline' : 'attachment') . '; filename="' . addcslashes($file['name'], "\\\"") . "\"\r\n";
+            $mime .= "Content-Transfer-Encoding: base64\r\n";
+            if ($file['cid'] !== '') $mime .= 'Content-ID: <' . $cleanHeader($file['cid']) . ">\r\n";
+            $mime .= "\r\n" . chunk_split(base64_encode($file['content'])) . "\r\n";
+        }
+        $mime .= '--' . $boundaryMixed . "--\r\n";
+    }
+    $rawMessage = rtrim(strtr(base64_encode($mime), '+/', '-_'), '=');
+    $requestBody = json_encode(['raw' => $rawMessage]);
+    if ($requestBody === false) return false;
+    if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'POST',
+            'header' => "Content-Type: application/json\r\nAuthorization: Bearer {$accessToken}\r\n",
+            'content' => $requestBody,
+            'timeout' => 30,
+            'ignore_errors' => true,
+        ],
+        'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
+    ]);
+    $response = @file_get_contents('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', false, $context);
+    $statusLine = (string)($http_response_header[0] ?? '');
+    if ($response === false || preg_match('/\s2\d\d\s/', $statusLine) !== 1) {
+        error_log('Gmail API mail send failed: ' . ($statusLine !== '' ? $statusLine : 'HTTPS request failed') . '; response=' . substr((string)$response, 0, 400));
+        return false;
+    }
+    return true;
+}
+
+/** Send an email through Resend's HTTPS API, avoiding outbound SMTP ports. */
+function sendMailViaResend($apiKey, $toEmail, $toName, $subject, $htmlBody, $altBody, $attachments, $cc) {
+    $fromEmail = trim((string)(getenv('RESEND_FROM_EMAIL') ?: getenv('SMTP_FROM_EMAIL') ?: ''));
+    $fromName = trim((string)(getenv('SMTP_FROM_NAME') ?: 'LLB Accountants'));
+    if ($fromEmail === '' || !filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
+        error_log('sendMail Resend failed: set RESEND_FROM_EMAIL to a valid sender verified with Resend.');
+        return false;
+    }
+
+    $formatAddress = static function ($email, $name = '') {
+        $email = trim((string)$email);
+        $name = trim((string)$name);
+        return $name !== '' ? $name . ' <' . $email . '>' : $email;
+    };
+    $resendAttachments = [];
+    $appendAttachment = static function ($content, $filename, $contentType = '', $contentId = '') use (&$resendAttachments) {
+        $item = [
+            'filename' => trim((string)$filename) !== '' ? trim((string)$filename) : 'attachment',
+            'content' => base64_encode((string)$content),
+        ];
+        if (trim((string)$contentType) !== '') $item['content_type'] = trim((string)$contentType);
+        if (trim((string)$contentId) !== '') $item['content_id'] = trim((string)$contentId);
+        $resendAttachments[] = $item;
+    };
+
+    $branding = function_exists('getEmailBranding') ? getEmailBranding() : [];
+    $logoPath = trim((string)($branding['logo_path'] ?? ''));
+    $logoCid = trim((string)($branding['logo_cid'] ?? ''));
+    if ($logoPath !== '' && $logoCid !== '' && stripos((string)$htmlBody, 'cid:' . $logoCid) !== false && is_readable($logoPath)) {
+        $logo = file_get_contents($logoPath);
+        if ($logo !== false) $appendAttachment($logo, basename($logoPath), function_exists('mime_content_type') ? (string)mime_content_type($logoPath) : 'image/png', $logoCid);
+    }
+
+    foreach ((array)$attachments as $attachment) {
+        if (is_string($attachment)) {
+            $path = trim($attachment);
+            if ($path !== '' && is_file($path) && is_readable($path)) {
+                $content = file_get_contents($path);
+                if ($content !== false) $appendAttachment($content, basename($path), function_exists('mime_content_type') ? (string)mime_content_type($path) : '');
+            }
+            continue;
+        }
+        if (!is_array($attachment)) continue;
+        $content = array_key_exists('content', $attachment) ? (string)($attachment['content'] ?? '') : '';
+        $name = trim((string)($attachment['name'] ?? 'attachment'));
+        $mime = trim((string)($attachment['mime'] ?? ''));
+        if ($content !== '') {
+            $appendAttachment($content, $name, $mime);
+        } else {
+            $path = trim((string)($attachment['path'] ?? ''));
+            if ($path !== '' && is_file($path) && is_readable($path)) {
+                $file = file_get_contents($path);
+                if ($file !== false) $appendAttachment($file, $name !== '' ? $name : basename($path), $mime !== '' ? $mime : (function_exists('mime_content_type') ? (string)mime_content_type($path) : ''));
+            }
+        }
+    }
+
+    $to = [$formatAddress($toEmail, $toName)];
+    $ccList = [];
+    foreach ((array)$cc as $entry) {
+        $email = is_array($entry) ? trim((string)($entry['email'] ?? '')) : trim((string)$entry);
+        $name = is_array($entry) ? trim((string)($entry['name'] ?? '')) : '';
+        if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) $ccList[] = $formatAddress($email, $name);
+    }
+
+    $payload = [
+        'from' => $formatAddress($fromEmail, $fromName),
+        'to' => $to,
+        'subject' => (string)$subject,
+        'html' => (string)$htmlBody,
+    ];
+    if ((string)$altBody !== '') $payload['text'] = (string)$altBody;
+    if ($ccList) $payload['cc'] = $ccList;
+    if ($resendAttachments) $payload['attachments'] = $resendAttachments;
+    $json = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    if ($json === false) {
+        error_log('sendMail Resend failed: could not encode the email payload.');
+        return false;
+    }
+
+    if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'POST',
+            'header' => "Content-Type: application/json\r\nAuthorization: Bearer {$apiKey}\r\n",
+            'content' => $json,
+            'timeout' => 30,
+            'ignore_errors' => true,
+        ],
+        'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
+    ]);
+    $response = @file_get_contents('https://api.resend.com/emails', false, $context);
+    $statusLine = (string)($http_response_header[0] ?? '');
+    if ($response === false || preg_match('/\s2\d\d\s/', $statusLine) !== 1) {
+        // Do not include request headers or the API key in logs.
+        error_log('sendMail Resend failed: ' . ($statusLine !== '' ? $statusLine : 'HTTPS request failed') . '; response=' . substr((string)$response, 0, 500));
+        return false;
+    }
+    return true;
+}
+
 function sendMail($toEmail, $toName, $subject, $htmlBody, $altBody = '', $attachments = [], $cc = []) {
+    $gmailApiRefreshToken = trim((string)(getenv('GMAIL_API_REFRESH_TOKEN') ?: ''));
+    if ($gmailApiRefreshToken !== '') {
+        return sendMailViaGmailApi($toEmail, $toName, $subject, $htmlBody, $altBody, $attachments, $cc);
+    }
+
+    $resendApiKey = trim((string)(getenv('RESEND_API_KEY') ?: ''));
+    if ($resendApiKey !== '') {
+        return sendMailViaResend($resendApiKey, $toEmail, $toName, $subject, $htmlBody, $altBody, $attachments, $cc);
+    }
+
     $relayUrl = trim((string)(getenv('MAIL_RELAY_URL') ?: ''));
     $relaySecret = trim((string)(getenv('MAIL_RELAY_SECRET') ?: ''));
     if ($relayUrl !== '' && $relaySecret !== '') {
