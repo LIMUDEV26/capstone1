@@ -380,6 +380,28 @@ export default function PayrollManagement() {
     const [viewRecord, setViewRecord] = useState<PayrollRecord | null>(null);
     const [openActionsId, setOpenActionsId] = useState<number | null>(null);
     const [actionMenuPosition, setActionMenuPosition] = useState<{ top: number; left: number } | null>(null);
+    useEffect(() => {
+        if (openActionsId === null) return;
+
+        const closeMenuWhenOutside = (event: MouseEvent) => {
+            const target = event.target;
+            if (target instanceof Element && target.closest('[data-payroll-action-control]')) return;
+            setOpenActionsId(null);
+            setActionMenuPosition(null);
+        };
+        const closeMenuOnEscape = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') return;
+            setOpenActionsId(null);
+            setActionMenuPosition(null);
+        };
+
+        document.addEventListener('mousedown', closeMenuWhenOutside);
+        document.addEventListener('keydown', closeMenuOnEscape);
+        return () => {
+            document.removeEventListener('mousedown', closeMenuWhenOutside);
+            document.removeEventListener('keydown', closeMenuOnEscape);
+        };
+    }, [openActionsId]);
     const viewTotals = useMemo(() => {
         if (!viewRecord) return null;
         const attendance = calcAttendanceDeduction(viewRecord);
@@ -1933,6 +1955,7 @@ export default function PayrollManagement() {
                                                 <button
                                                     type="button"
                                                     className={`${s.actionMenuTrigger} ${rowBusy ? s.isWorking : ''}`}
+                                                    data-payroll-action-control
                                                     disabled={rowBusy}
                                                     title={rowBusy ? 'Working...' : 'Open actions'}
                                                     aria-label={`Open actions for ${r.full_employee_name || r.employee_name}`}
@@ -1960,6 +1983,7 @@ export default function PayrollManagement() {
                                                 {openActionsId === r.id && (
                                                     <div
                                                         className={s.actionMenu}
+                                                        data-payroll-action-control
                                                         role="menu"
                                                         aria-label="Payroll actions"
                                                         style={{ position: 'fixed', top: actionMenuPosition?.top ?? 8, left: actionMenuPosition?.left ?? 8, right: 'auto' }}
