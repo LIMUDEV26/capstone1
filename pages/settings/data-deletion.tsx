@@ -416,7 +416,7 @@ export default function DataDeletionSettingsPage() {
             payroll: {
                 label: 'Payroll',
                 subtitle: 'Archived payroll records',
-                emptyText: 'No archived payroll records available to restore.',
+                emptyText: 'No archived payroll records waiting for restore or automatic five-year removal.',
                 load: async () => {
                     const payload = await requestJson<Record<string, unknown>[]>(`${API_BASE}/payroll.php?storage_deleted=1`);
                     if (!payload.success) throw new Error(getMessage(payload, 'Failed to load archived payroll records.'));
@@ -1113,7 +1113,7 @@ export default function DataDeletionSettingsPage() {
                         </div>
 
                         <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af', borderRadius: 10, padding: '12px 14px', marginBottom: 10, fontSize: 13 }}>
-                            Activity Logs shows the live system trail and archived entries. Logs older than the current {activityRetentionDays}-day window are archived and can be restored for 180 days; archived logs are then permanently removed automatically. Employee and payroll records use a 5-year (1,825-day) retention period.
+                            Activity Logs shows the live system trail and archived entries. Logs older than the current {activityRetentionDays}-day window can be restored for 180 days, then are removed automatically. Payroll records moved here can be restored for five years (1,825 days) from the inactive date, then are removed automatically.
                         </div>
 
                         <section style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden', minWidth: 0 }}>
@@ -1340,18 +1340,6 @@ export default function DataDeletionSettingsPage() {
                                                                 >
                                                                     {activeState.deletingId === item.id ? 'Restoring...' : 'Restore'}
                                                                 </button>
-                                                                {activeResource === 'payroll' && (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => void handleDeleteOne(activeResource, item, 'delete')}
-                                                                        disabled={activeState.deletingId === item.id || deletingAll}
-                                                                        title="Permanently delete this payroll record"
-                                                                        aria-label={`Permanently delete ${item.title}`}
-                                                                        style={{ padding: '6px 14px', border: 'none', borderRadius: 8, background: '#dc2626', color: 'white', cursor: activeState.deletingId === item.id || deletingAll ? 'default' : 'pointer', opacity: activeState.deletingId === item.id || deletingAll ? 0.6 : 1, fontWeight: 700, fontSize: 12, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                                                                    >
-                                                                        {activeState.deletingId === item.id ? 'Working...' : 'Delete'}
-                                                                    </button>
-                                                                )}
                                                             </div>
                                                         ) : (
                                                             <button

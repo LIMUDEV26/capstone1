@@ -737,9 +737,9 @@ function handleGet($conn) {
     }
 }
 
-/** Permanently remove employee payroll records five years after archival. */
+/** Permanently remove payroll records five years after they enter Data Storage. */
 function purgeExpiredArchivedPayroll($conn) {
-    $stmt = $conn->prepare("DELETE FROM payroll WHERE status = 'archived' AND archived_at IS NOT NULL AND archived_at < DATE_SUB(NOW(), INTERVAL 1825 DAY)");
+    $stmt = $conn->prepare("DELETE FROM payroll WHERE status = 'archived' AND storage_deleted_at IS NOT NULL AND storage_deleted_at < DATE_SUB(NOW(), INTERVAL 1825 DAY)");
     if (!$stmt) return 0;
     if (!$stmt->execute()) {
         error_log('Expired payroll archive cleanup failed: ' . $conn->error);
@@ -749,7 +749,7 @@ function purgeExpiredArchivedPayroll($conn) {
     $deleted = (int)$stmt->affected_rows;
     $stmt->close();
     if ($deleted > 0) {
-        logActivity($conn, null, 'expire_archived_payroll', "Automatically permanently removed {$deleted} payroll record(s) archived for more than 1825 days", 'payroll_management');
+        logActivity($conn, null, 'expire_archived_payroll', "Automatically removed {$deleted} payroll record(s) after 1825 days in Data Storage", 'payroll_management');
     }
     return $deleted;
 }
@@ -1558,6 +1558,9 @@ function handleDelete($conn) {
     }
 
     $permanent = intval($_GET['permanent'] ?? 0) === 1;
+    if ($permanent) {
+        sendError('Manual permanent deletion is disabled. Payroll records in Data Storage are removed automatically after five years.', 403);
+    }
     if ($record['status'] === 'archived' && !$permanent) {
         if (!empty($record['storage_deleted_at'])) {
             sendResponse(true, null, 'Payroll record is already in Data Storage.');
@@ -1578,8 +1581,8 @@ function handleDelete($conn) {
         sendResponse(true, null, 'Payroll record moved to Data Storage.');
     }
 
-    if ($record['status'] === 'archived' && empty($record['storage_deleted_at'])) {
-        sendError('Move the payroll record to Data Storage before permanently deleting it.', 409);
+    if ($record['status'] === 'archived') {
+        sendError('Archived payroll records must be moved to Data Storage.', 409);
     }
     
     $sql = "DELETE FROM payroll WHERE id = ?";
