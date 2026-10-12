@@ -618,220 +618,58 @@ function resolveBase44MappedEmployee($employeeDirectory, $mappings, $method, $la
 function resolveImportedEmployee($employeeDirectory, $base44Mappings, $sourceSystem, $externalEmployeeCode, $externalEmployeeName, $externalRole, $externalBranch) {
     $externalEmployeeCode = normalizeIdentityValue($externalEmployeeCode);
     $externalEmployeeName = normalizeIdentityValue($externalEmployeeName);
-    $externalRole = normalizeIdentityValue($externalRole);
-    $externalBranch = normalizeIdentityValue($externalBranch);
-
     $externalCodeKey = normalizeIdentityKey($externalEmployeeCode);
     $externalNameKey = normalizeIdentityKey($externalEmployeeName);
-    $externalRoleKey = normalizeIdentityKey($externalRole);
-    $externalBranchKey = normalizeIdentityKey($externalBranch);
 
-    if ($externalCodeKey === '' && $externalNameKey === '') {
+    if ($externalCodeKey === '' || $externalNameKey === '') {
         return [
             'ok' => false,
-            'message' => 'Missing employee identity. Provide EmployeeID, EmployeeName, or both.',
+            'message' => 'This attendance row needs both an EmployeeID and EmployeeName to match an existing employee.',
         ];
     }
 
-    // ── Priority 1: confirmed Base44 code mapping ────────────────────────────
-    // A ZKTeco EmployeeID is the authoritative identity signal.  It must be
-    // checked before any saved external mapping, otherwise a stale mapping can
-    // attach attendance (and payroll) to the wrong person.
-    if ($externalCodeKey !== '' && count($employeeDirectory['by_date_id'][$externalCodeKey] ?? []) === 1) {
-        $employee = $employeeDirectory['by_date_id'][$externalCodeKey][0];
-        // A conflicting name can indicate that a biometric code was reassigned.
-        // If the file name uniquely identifies someone else, trust that exact
-        // name match instead of silently importing under the old code owner.
-        $nameConflicts = $externalNameKey !== ''
-            && $employee['normalized_full_name'] !== ''
-            && $externalNameKey !== $employee['normalized_full_name'];
-        if (!$nameConflicts) {
+    // A registered ID must belong to the same employee as the exact name.
+    // Never redirect a registered ID to another person based on their name.
+    $idMatches = $employeeDirectory['by_date_id'][$externalCodeKey] ?? [];
+    if (count($idMatches) === 1) {
+        $employee = $idMatches[0];
+        if ($employee['normalized_full_name'] === $externalNameKey) {
             return buildResolvedEmployeeMatch(
                 $employee,
                 'employee_date_id_match',
-                'Biometric ID matched employee record',
+                'Biometric ID and employee name matched',
                 1.0,
-                ['ZKTeco Employee ID "' . $externalEmployeeCode . '" matched employee code "' . $employee['employee_date_id'] . '"']
-            );
-        }
-        $uniqueNameMatches = $employeeDirectory['by_name'][$externalNameKey] ?? [];
-        if (count($uniqueNameMatches) === 1) {
-            return buildResolvedEmployeeMatch(
-                $uniqueNameMatches[0],
-                'smart_name_match',
-                'Exact employee name matched; biometric ID differed',
-                0.96,
-                ['Exact employee name matched; the file ID pointed to a different employee']
+                ['EmployeeID and EmployeeName both matched the same employee record']
             );
         }
         return [
             'ok' => false,
-            'message' => 'The uploaded biometric ID matches "' . $employee['name'] . '", but the uploaded name "' . $externalEmployeeName . '" does not. No unique employee-name match was found, so this row was not assigned to the wrong person.',
+            'message' => 'The uploaded EmployeeID belongs to "' . $employee['name'] . '", but the uploaded name does not match that employee. This row was skipped to avoid assigning attendance to the wrong person.',
         ];
     }
-
-    // When the biometric ID is unknown or duplicated locally, a unique exact
-    // name in the uploaded file is safer than a stale external code mapping.
-    if ($externalNameKey !== '') {
-        $uniqueNameMatches = $employeeDirectory['by_name'][$externalNameKey] ?? [];
-        if (count($uniqueNameMatches) === 1) {
-            return buildResolvedEmployeeMatch(
-                $uniqueNameMatches[0],
-                'smart_name_match',
-                'Unique exact employee name matched',
-                0.96,
-                ['Unique exact employee name in the uploaded file']
-            );
-        }
+    if (count($idMatches) > 1) {
+        return ['ok' => false, 'message' => 'This EmployeeID is assigned to more than one employee record, so the row was skipped.'];
     }
 
-    // Saved external mappings are a fallback only when the source code is not
-    // an exact biometric/HR ID in this system.
-    if (!empty($base44Mappings['by_code'][$externalCodeKey])) {
-        $resolved = resolveBase44MappedEmployee(
-            $employeeDirectory,
-            $base44Mappings['by_code'][$externalCodeKey],
-            'base44_confirmed_code',
-            'Base44 confirmed code mapping',
-            'external employee code'
+    // A changed/unregistered device ID may still be imported when the exact
+    // name uniquely matches an employee already in the system. This does not
+    // create employees or accept fuzzy, mapped, or ambiguous name matches.
+    $uniqueNameMatches = $employeeDirectory['by_name'][$externalNameKey] ?? [];
+    if (count($uniqueNameMatches) === 1) {
+        return buildResolvedEmployeeMatch(
+            $uniqueNameMatches[0],
+            'smart_name_match',
+            'Unregistered EmployeeID; exact employee name matched',
+            0.96,
+            ['EmployeeID is not registered; exact unique EmployeeName matched an existing employee']
         );
-        if ($resolved !== null) {
-            return $resolved;
-        }
     }
 
-    // ── Priority 2: confirmed Base44 name mapping ────────────────────────────
-    if ($externalNameKey !== '' && !empty($base44Mappings['by_name'][$externalNameKey])) {
-        $resolved = resolveBase44MappedEmployee(
-            $employeeDirectory,
-            $base44Mappings['by_name'][$externalNameKey],
-            'base44_confirmed_name',
-            'Base44 confirmed name mapping',
-            'external employee name'
-        );
-        if ($resolved !== null) {
-            return $resolved;
-        }
-    }
-
-    // ── Priority 3: exact employee_date_id match (biometric/HR ID) ──────────
-    // ── Code-only path: no name provided ────────────────────────────────────
-    // The EmployeeID column contains a short code (e.g. initials like "AGH")
-    // that didn't match any employee_date_id and has no confirmed Base44 mapping.
-    // Role/branch signals alone are far too weak to identify an employee safely;
-    // running fuzzy scoring would produce a wall of identical low-confidence
-    // errors all pointing to the same arbitrary employee. Fail early instead.
-    if ($externalNameKey === '') {
-        $message = 'Unrecognised employee code "' . $externalEmployeeCode . '".';
-        $message .= ' The code does not match any employee_date_id in the database.';
-        $message .= ' Either add the EmployeeName column to your spreadsheet,'
-            . ' update the employee\'s biometric/HR ID in the system to match this code,'
-            . ' or create a confirmed identity mapping for source "' . $sourceSystem . '".';
-        return ['ok' => false, 'message' => $message];
-    }
-
-    // ── Priority 4: fuzzy name matching (name must be present) ──────────────
-    // Only name-bearing signals (exact match, high similarity, employee_date_id,
-    // numeric ID) are used to score. Role and branch are intentionally excluded:
-    // they are shared by many employees and produce misleading low-confidence
-    // matches when name similarity is zero.
-    $exactNameMatches = $employeeDirectory['by_name'][$externalNameKey] ?? [];
-    $candidates = [];
-
-    foreach ($employeeDirectory['list'] as $employee) {
-        $score = 0.0;
-        $signals = [];
-
-        if ($employee['normalized_full_name'] !== '') {
-            if ($employee['normalized_full_name'] === $externalNameKey) {
-                $score += 0.82;
-                $signals[] = 'Exact employee name match';
-                if (count($exactNameMatches) === 1) {
-                    $score += 0.14;
-                    $signals[] = 'Unique active employee with this exact name';
-                }
-            } else {
-                similar_text($externalNameKey, $employee['normalized_full_name'], $nameSimilarityPercent);
-                $nameSimilarity = max(0, min(1, $nameSimilarityPercent / 100));
-                if ($nameSimilarity >= 0.85) {
-                    $score += min(0.72, $nameSimilarity * 0.72);
-                    $signals[] = 'High name similarity ' . number_format($nameSimilarity, 2);
-                } elseif ($nameSimilarity >= 0.75) {
-                    $score += min(0.58, $nameSimilarity * 0.58);
-                    $signals[] = 'Name similarity ' . number_format($nameSimilarity, 2);
-                }
-            }
-        }
-
-        // Code signals only supplement name — never used as sole evidence.
-        if ($externalCodeKey !== '') {
-            if ($employee['normalized_employee_date_id'] !== '' && $employee['normalized_employee_date_id'] === $externalCodeKey) {
-                $score += 0.35;
-                $signals[] = 'External code matched employee code';
-            }
-            if (ctype_digit($externalCodeKey) && intval($externalCodeKey) === intval($employee['employee_id'])) {
-                $score += 0.12;
-                $signals[] = 'External code matched internal ID (low-trust signal)';
-            }
-        }
-
-        // Role/branch are intentionally NOT scored here.
-        // They are shared across many employees; awarding them when there is no
-        // name match causes every unresolved row to accumulate a tiny identical
-        // score and produce the same misleading "best match" error repeatedly.
-
-        // Only keep candidates that have at least some name-level evidence.
-        if ($score <= 0) continue;
-
-        $candidates[] = [
-            'employee' => $employee,
-            'score' => min(0.99, $score),
-            'signals' => $signals,
-        ];
-    }
-
-    if (empty($candidates)) {
-        return [
-            'ok' => false,
-            'message' => 'No active employee matched "' . $externalEmployeeName . '" closely enough for safe payroll import.',
-        ];
-    }
-
-    usort($candidates, static function ($left, $right) {
-        $scoreCompare = $right['score'] <=> $left['score'];
-        if ($scoreCompare !== 0) return $scoreCompare;
-        return $left['employee']['employee_id'] <=> $right['employee']['employee_id'];
-    });
-
-    $topCandidate = $candidates[0];
-    $secondCandidate = $candidates[1] ?? null;
-
-    if ($topCandidate['score'] < 0.95) {
-        return [
-            'ok' => false,
-            'message' => 'Low-confidence match for "' . $externalEmployeeName . '": best candidate was '
-                . $topCandidate['employee']['name']
-                . ' (confidence ' . number_format($topCandidate['score'], 2) . ').'
-                . ' Provide an exact name, update the biometric ID, or confirm a mapping.',
-        ];
-    }
-
-    if ($secondCandidate !== null && abs($topCandidate['score'] - $secondCandidate['score']) < 0.05) {
-        return [
-            'ok' => false,
-            'message' => 'Ambiguous identity for "' . $externalEmployeeName . '". Multiple employees scored too closely for safe payroll import.',
-        ];
-    }
-
-    return buildResolvedEmployeeMatch(
-        $topCandidate['employee'],
-        'smart_name_match',
-        'Smart exact-name match',
-        $topCandidate['score'],
-        $topCandidate['signals']
-    );
+    return [
+        'ok' => false,
+        'message' => 'The EmployeeID is not registered and the EmployeeName does not uniquely match an existing employee. This row was skipped.',
+    ];
 }
-
 function attendanceImportUserId() {
     return intval($_SESSION['user_id'] ?? 0);
 }
