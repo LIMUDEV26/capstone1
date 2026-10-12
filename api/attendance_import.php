@@ -106,6 +106,93 @@ function normalizeAttendanceHeader($value) {
     return preg_replace('/[^a-z0-9]/', '', $header) ?? $header;
 }
 
+/** Convert ZKTeco Card Report's multi-row, side-by-side employee totals into the attendance template shape. */
+function convertZktecoCardReportRows($rows) {
+    if (!is_array($rows) || count($rows) < 4) return null;
+
+    $headerIndex = null;
+    $employeeBlocks = [];
+    foreach ($rows as $rowIndex => $row) {
+        $normalized = array_map('normalizeAttendanceHeader', $row);
+        $absentColumns = [];
+        foreach ($normalized as $columnIndex => $label) {
+            if ($label === 'absentday') $absentColumns[] = $columnIndex;
+        }
+        if ($absentColumns && in_array('ondutyday', $normalized, true)
+            && in_array('overtimeh', $normalized, true) && in_array('late', $normalized, true)) {
+            $headerIndex = $rowIndex;
+            $employeeBlocks = $absentColumns;
+            break;
+        }
+    }
+    if ($headerIndex === null || $headerIndex < 1) return null;
+
+    // In this report the line after the attendance labels contains units, and
+    // the following line contains each employee's period total.
+    $summaryRow = $rows[$headerIndex + 2] ?? null;
+    if (!is_array($summaryRow)) return null;
+
+    $nameRowIndex = null;
+    $idHeaderIndex = null;
+    for ($rowIndex = $headerIndex - 1; $rowIndex >= 0; $rowIndex--) {
+        $labels = array_map('normalizeAttendanceHeader', $rows[$rowIndex]);
+        if ($nameRowIndex === null && in_array('name', $labels, true)) $nameRowIndex = $rowIndex;
+        if ($idHeaderIndex === null && in_array('id', $labels, true)) $idHeaderIndex = $rowIndex;
+        if ($nameRowIndex !== null && $idHeaderIndex !== null) break;
+    }
+    if ($nameRowIndex === null || $idHeaderIndex === null) return null;
+
+    $nameRow = $rows[$nameRowIndex];
+    $idHeaderRow = $rows[$idHeaderIndex];
+    $normalizedIds = array_map('normalizeAttendanceHeader', $idHeaderRow);
+    $converted = [ATTENDANCE_IMPORT_TEMPLATE_HEADERS];
+
+    foreach ($employeeBlocks as $blockIndex => $blockStart) {
+        $blockEnd = $employeeBlocks[$blockIndex + 1] ?? count($summaryRow);
+        $idColumn = null;
+        for ($columnIndex = $blockStart; $columnIndex < $blockEnd; $columnIndex++) {
+            if (($normalizedIds[$columnIndex] ?? '') === 'id') {
+                $idColumn = $columnIndex;
+                break;
+            }
+        }
+
+        $nameColumn = null;
+        for ($columnIndex = $blockStart; $columnIndex < $blockEnd; $columnIndex++) {
+            if ((normalizeAttendanceHeader($nameRow[$columnIndex] ?? '') === 'name')
+                && trim((string)($nameRow[$columnIndex + 1] ?? '')) !== '') {
+                $nameColumn = $columnIndex + 1;
+                break;
+            }
+        }
+
+        if ($idColumn === null) continue;
+        // Card Reports place the employee ID beside the "ID" label in the
+        // identity row; the summary row only contains attendance totals.
+        $employeeId = trim((string)($idHeaderRow[$idColumn + 1] ?? ''));
+        if ($employeeId === '') continue;
+
+        $daysWorked = trim((string)($summaryRow[$blockStart + 3] ?? '0'));
+        $overtimeHours = floatval($summaryRow[$blockStart + 4] ?? 0)
+            + floatval($summaryRow[$blockStart + 5] ?? 0);
+        $lateMinutes = trim((string)($summaryRow[$blockStart + 7] ?? '0'));
+
+        $converted[] = [
+            $employeeId,
+            $nameColumn === null ? '' : trim((string)($nameRow[$nameColumn] ?? '')),
+            '',
+            '',
+            $daysWorked,
+            (string)$overtimeHours,
+            $lateMinutes,
+            trim((string)($summaryRow[$blockStart] ?? '0')),
+            '0',
+        ];
+    }
+
+    return count($converted) > 1 ? $converted : null;
+}
+
 function normalizeIdentityValue($value) {
     $normalized = preg_replace('/\s+/', ' ', trim((string)$value));
     return is_string($normalized) ? $normalized : '';
@@ -886,6 +973,10 @@ function handleImport($conn) {
         @unlink($tmpCsv);
     } else {
         $rows = parseXlsx($file['tmp_name']);
+    }
+    if ($ext === 'csv') {
+        $cardReportRows = convertZktecoCardReportRows($rows);
+        if ($cardReportRows !== null) $rows = $cardReportRows;
     }
     if (empty($rows)) {
         sendError('The uploaded file contains no data rows', 400);
