@@ -534,6 +534,7 @@ export default function EmployeesPage() {
             const haystack = [
                 row.first_name,
                 row.last_name,
+                row.employee_date_id,
                 row.email,
                 row.position,
                 row.branch_name,
@@ -720,7 +721,12 @@ export default function EmployeesPage() {
             setLinkUserEnabled(false);
             setGovNumberEnabled(createInitialGovNumberEnabled());
             setFieldErrors({});
-            setSuccess(data.message || 'Employee saved.');
+            const permanentAttendanceId = !editing ? String(data.data?.employee_date_id || '').trim() : '';
+            setSuccess(
+                permanentAttendanceId
+                    ? `${data.message || 'Employee created.'}. Permanent attendance ID: ${permanentAttendanceId}. Use this exact ID in the attendance file.`
+                    : (data.message || 'Employee saved.')
+            );
 
             if (editing) {
                 // Optimistic update for PUT: merge response with existing row
@@ -1231,7 +1237,7 @@ export default function EmployeesPage() {
                     <div style={modal}>
                         <h3 style={{ marginTop: 0 }}>Employee Details</h3>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 8 }}>
-                            <Info label='ID' value={viewRow.employee_date_id || `EMP#${viewRow.employee_id}`} />
+                            <Info label='Permanent Attendance ID' value={viewRow.employee_date_id || `EMP#${viewRow.employee_id}`} />
                             <Info label='Name' value={`${viewRow.first_name} ${viewRow.last_name}`} />
                             <Info label='Email' value={viewRow.email || '-'} />
                             <Info label='Phone' value={formatPhoneDisplay(viewRow.phone_number) || '-'} />
@@ -1286,6 +1292,32 @@ export default function EmployeesPage() {
                         <h3 style={{ marginTop: 0 }}>{editing ? 'Edit Employee' : 'Add Employee'}</h3>
                         <form onSubmit={submit} noValidate>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 8 }}>
+                                <div>
+                                    <label style={fieldLabel}>Permanent Attendance ID</label>
+                                    {editing ? (
+                                        <div style={{ display: 'flex', gap: 6 }}>
+                                            <input readOnly value={editing.employee_date_id || ''} aria-label="Permanent attendance ID" style={{ ...input, background: '#f8fafc', fontFamily: 'monospace', fontWeight: 700 }} />
+                                            <button
+                                                type="button"
+                                                style={btnNeutral}
+                                                disabled={!editing.employee_date_id}
+                                                onClick={async () => {
+                                                    try {
+                                                        await navigator.clipboard.writeText(String(editing.employee_date_id || ''));
+                                                        void notifySuccess('Attendance ID copied. Use it in the EmployeeID column of the attendance file.');
+                                                    } catch {
+                                                        setError('Could not copy the ID. Please select and copy it manually.');
+                                                    }
+                                                }}
+                                            >Copy ID</button>
+                                        </div>
+                                    ) : (
+                                        <div style={fieldValue}>Generated automatically when you save</div>
+                                    )}
+                                    <div style={{ marginTop: 4, color: '#64748b', fontSize: 11 }}>
+                                        Keep this ID unchanged and enter it in the attendance file’s EmployeeID column.
+                                    </div>
+                                </div>
                                 <TextField label='First Name *' name='first_name' value={form.first_name} onChange={setForm} required error={fieldErrors.first_name} onClearError={() => clearFieldError('first_name')} />
                                 <TextField label={editing ? 'Last Name (optional)' : 'Last Name *'} name='last_name' value={form.last_name} onChange={setForm} required={!editing} error={fieldErrors.last_name} onClearError={() => clearFieldError('last_name')} />
                                 <TextField label='Email *' name='email' value={form.email} onChange={setForm} type='email' required error={fieldErrors.email} onClearError={() => clearFieldError('email')} />

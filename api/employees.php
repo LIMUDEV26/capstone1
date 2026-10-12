@@ -1210,6 +1210,24 @@ function handleGet($conn) {
 /**
  * POST - Create new employee
  */
+function generatePermanentEmployeeDateId($conn) {
+    // Keep the attendance ID independent of names and dates. It is generated
+    // once at employee creation and the update endpoint does not modify it.
+    for ($attempt = 0; $attempt < 20; $attempt++) {
+        // Use an eight-digit numeric ID so it can also be entered into a
+        // biometric attendance device that accepts numeric employee codes.
+        $candidate = (string)random_int(10000000, 99999999);
+        $check = $conn->prepare('SELECT employee_id FROM employees WHERE employee_date_id = ? LIMIT 1');
+        if (!$check) throw new RuntimeException('Failed to verify generated employee ID.');
+        $check->bind_param('s', $candidate);
+        $check->execute();
+        $exists = $check->get_result()->num_rows > 0;
+        $check->close();
+        if (!$exists) return $candidate;
+    }
+    throw new RuntimeException('Could not generate a unique employee ID. Please try again.');
+}
+
 function handlePost($conn) {
     $data = getJSONInput();
 
@@ -1298,7 +1316,7 @@ function handlePost($conn) {
     assertBranchExists($conn, $branch_id);
     assertEmployeeIdentityNotDuplicate($conn, $first_name, $last_name, $date_of_birth);
 
-    $employee_date_id = generateUniqueID('EMP-');
+    $employee_date_id = generatePermanentEmployeeDateId($conn);
 
     $sql = "INSERT INTO employees (
                 employee_date_id, first_name, last_name, date_of_birth, email,
