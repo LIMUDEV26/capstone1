@@ -1974,7 +1974,7 @@ export default function PayrollManagement() {
                                                             View
                                                         </button>
                                                         {canManage && <>
-                                                            {r.status !== 'archived' && (
+                                                            {r.status !== 'archived' && r.status !== 'paid' && (
                                                                 <button
                                                                     type="button"
                                                                     className={s.actionMenuItem}

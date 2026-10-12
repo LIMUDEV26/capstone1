@@ -1156,6 +1156,10 @@ function handlePut($conn) {
         : $currentStatus;
     $hasNonStatusUpdates = count(array_diff(array_keys($data), ['id', 'status'])) > 0;
 
+    if ($currentStatus === 'paid' && $hasNonStatusUpdates) {
+        sendError('Paid payroll records cannot be edited. Revert the payslip to Approved first if a correction is needed.', 400);
+    }
+
     if ($currentStatus === 'archived') {
         if ($hasNonStatusUpdates) {
             sendError('Archived payroll records cannot be modified.', 400);
