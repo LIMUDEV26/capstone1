@@ -70,7 +70,8 @@ function getEmailBranding() {
             $scheme = $isHttps ? 'https' : 'http';
             $host = trim((string)($_SERVER['HTTP_HOST'] ?? ''));
             if ($host !== '') {
-                $logoUrl = $scheme . '://' . $host . '/capstone1/logo.png';
+                // Railway serves the Next.js public directory from the site root.
+                $logoUrl = $scheme . '://' . $host . '/logo.png';
             }
         }
     }
@@ -326,6 +327,7 @@ function sendMailViaGmailApi($toEmail, $toName, $subject, $htmlBody, $altBody, $
         return $name !== '' ? '"' . addcslashes($name, "\\\"") . '" <' . $email . '>' : $email;
     };
     $boundaryMixed = 'llb_m_' . bin2hex(random_bytes(12));
+    $boundaryRelated = 'llb_r_' . bin2hex(random_bytes(12));
     $boundaryAlt = 'llb_a_' . bin2hex(random_bytes(12));
     $plainText = (string)$altBody;
     if ($plainText === '') $plainText = strip_tags((string)preg_replace('/<style\b[^>]*>.*?<\/style>/is', '', $htmlBody));
@@ -344,13 +346,14 @@ function sendMailViaGmailApi($toEmail, $toName, $subject, $htmlBody, $altBody, $
     $mime .= 'Date: ' . gmdate('D, d M Y H:i:s') . ' +0000' . "\r\n";
     $mime .= 'Auto-Submitted: auto-generated' . "\r\n";
 
-    $embedded = [];
+    $inlineImages = [];
+    $fileAttachments = [];
     $branding = function_exists('getEmailBranding') ? getEmailBranding() : [];
     $logoPath = trim((string)($branding['logo_path'] ?? ''));
     $logoCid = trim((string)($branding['logo_cid'] ?? ''));
     if ($logoPath !== '' && $logoCid !== '' && stripos((string)$htmlBody, 'cid:' . $logoCid) !== false && is_file($logoPath) && is_readable($logoPath)) {
         $logoContent = file_get_contents($logoPath);
-        if ($logoContent !== false) $embedded[] = ['content' => $logoContent, 'name' => basename($logoPath), 'mime' => function_exists('mime_content_type') ? (string)(mime_content_type($logoPath) ?: 'image/png') : 'image/png', 'cid' => $logoCid];
+        if ($logoContent !== false) $inlineImages[] = ['content' => $logoContent, 'name' => basename($logoPath), 'mime' => function_exists('mime_content_type') ? (string)(mime_content_type($logoPath) ?: 'image/png') : 'image/png', 'cid' => $logoCid];
     }
     foreach ((array)$attachments as $attachment) {
         $content = '';
@@ -374,24 +377,39 @@ function sendMailViaGmailApi($toEmail, $toName, $subject, $htmlBody, $altBody, $
                 if ($contentType === 'application/octet-stream' && function_exists('mime_content_type')) $contentType = (string)(mime_content_type($path) ?: $contentType);
             }
         } else continue;
-        if ($content !== '') $embedded[] = ['content' => $content, 'name' => $name, 'mime' => $contentType, 'cid' => ''];
+        if ($content !== '') $fileAttachments[] = ['content' => $content, 'name' => $name, 'mime' => $contentType, 'cid' => ''];
     }
 
-    if ($embedded) {
-        $mime .= 'Content-Type: multipart/mixed; boundary="' . $boundaryMixed . '"' . "\r\n\r\n";
-        $mime .= '--' . $boundaryMixed . "\r\nContent-Type: multipart/alternative; boundary=\"{$boundaryAlt}\"\r\n\r\n";
-    } else {
-        $mime .= 'Content-Type: multipart/alternative; boundary="' . $boundaryAlt . '"' . "\r\n\r\n";
+    $alternativeMime = 'Content-Type: multipart/alternative; boundary="' . $boundaryAlt . '"' . "\r\n\r\n";
+    $alternativeMime .= '--' . $boundaryAlt . "\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n" . chunk_split(base64_encode($plainText)) . "\r\n";
+    $alternativeMime .= '--' . $boundaryAlt . "\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n" . chunk_split(base64_encode((string)$htmlBody)) . "\r\n";
+    $alternativeMime .= '--' . $boundaryAlt . "--\r\n";
+
+    $bodyMime = $alternativeMime;
+    if ($inlineImages) {
+        // Related MIME is required for clients such as Gmail to resolve cid: images.
+        $bodyMime = 'Content-Type: multipart/related; boundary="' . $boundaryRelated . '"' . "\r\n\r\n";
+        $bodyMime .= '--' . $boundaryRelated . "\r\n" . $alternativeMime;
+        foreach ($inlineImages as $image) {
+            $bodyMime .= '--' . $boundaryRelated . "\r\nContent-Type: {$image['mime']}; name=\"" . addcslashes($image['name'], "\\\"") . "\"\r\n";
+            $bodyMime .= 'Content-Disposition: inline; filename="' . addcslashes($image['name'], "\\\"") . "\"\r\n";
+            $bodyMime .= "Content-Transfer-Encoding: base64\r\nContent-ID: <" . $cleanHeader($image['cid']) . ">\r\n\r\n";
+            $bodyMime .= chunk_split(base64_encode($image['content'])) . "\r\n";
+        }
+        $bodyMime .= '--' . $boundaryRelated . "--\r\n";
     }
-    $mime .= '--' . $boundaryAlt . "\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n" . chunk_split(base64_encode($plainText)) . "\r\n";
-    $mime .= '--' . $boundaryAlt . "\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n" . chunk_split(base64_encode((string)$htmlBody)) . "\r\n";
-    $mime .= '--' . $boundaryAlt . "--\r\n";
-    if ($embedded) {
-        foreach ($embedded as $file) {
+
+    if ($fileAttachments) {
+        $mime .= 'Content-Type: multipart/mixed; boundary="' . $boundaryMixed . '"' . "\r\n\r\n";
+        $mime .= '--' . $boundaryMixed . "\r\n" . $bodyMime;
+    } else {
+        $mime .= $bodyMime;
+    }
+    if ($fileAttachments) {
+        foreach ($fileAttachments as $file) {
             $mime .= '--' . $boundaryMixed . "\r\nContent-Type: {$file['mime']}; name=\"" . addcslashes($file['name'], "\\\"") . "\"\r\n";
-            $mime .= 'Content-Disposition: ' . ($file['cid'] !== '' ? 'inline' : 'attachment') . '; filename="' . addcslashes($file['name'], "\\\"") . "\"\r\n";
+            $mime .= 'Content-Disposition: attachment; filename="' . addcslashes($file['name'], "\\\"") . "\"\r\n";
             $mime .= "Content-Transfer-Encoding: base64\r\n";
-            if ($file['cid'] !== '') $mime .= 'Content-ID: <' . $cleanHeader($file['cid']) . ">\r\n";
             $mime .= "\r\n" . chunk_split(base64_encode($file['content'])) . "\r\n";
         }
         $mime .= '--' . $boundaryMixed . "--\r\n";
@@ -564,10 +582,7 @@ function sendMail($toEmail, $toName, $subject, $htmlBody, $altBody = '', $attach
     $fromName = trim((string)(getenv('SMTP_FROM_NAME') ?: 'LLB Accountants'));
     $smtpEncryptionRaw = strtolower(trim((string)(getenv('SMTP_ENCRYPTION') ?: 'tls')));
     $smtpDebugRaw = trim((string)(getenv('SMTP_DEBUG') ?: '0'));
-    // Allow independent connect vs. read/write timeouts via env vars.
-    // SMTP_CONNECT_TIMEOUT  – TCP + TLS handshake timeout  (default 10 s)
-    // SMTP_TIMEOUT          – DATA / response read timeout (default 15 s)
-    $smtpConnectTimeoutRaw = trim((string)(getenv('SMTP_CONNECT_TIMEOUT') ?: getenv('SMTP_TIMEOUT') ?: '10'));
+    // PHPMailer 7 applies SMTP_TIMEOUT to connection and response waits.
     $smtpTimeoutRaw        = trim((string)(getenv('SMTP_TIMEOUT') ?: '15'));
 
     $smtpHost = $smtpHostRaw !== '' ? $smtpHostRaw : 'smtp.gmail.com';
@@ -592,10 +607,6 @@ function sendMail($toEmail, $toName, $subject, $htmlBody, $altBody = '', $attach
     $smtpDebug = is_numeric($smtpDebugRaw) ? (int)$smtpDebugRaw : 0;
     if ($smtpDebug < 0) $smtpDebug = 0;
     if ($smtpDebug > 4) $smtpDebug = 4;
-
-    $smtpConnectTimeout = is_numeric($smtpConnectTimeoutRaw) ? (int)$smtpConnectTimeoutRaw : 10;
-    if ($smtpConnectTimeout < 3)  $smtpConnectTimeout = 3;
-    if ($smtpConnectTimeout > 30) $smtpConnectTimeout = 30;
 
     $smtpTimeout = is_numeric($smtpTimeoutRaw) ? (int)$smtpTimeoutRaw : 15;
     if ($smtpTimeout < 3)  $smtpTimeout = 3;
@@ -635,9 +646,8 @@ function sendMail($toEmail, $toName, $subject, $htmlBody, $altBody = '', $attach
         } else {
             $mail->SMTPAutoTLS = false;
         }
-        // ConnectTimeout controls only the TCP+TLS handshake;
-        // Timeout controls DATA transmission and server responses.
-        $mail->ConnectTimeout = $smtpConnectTimeout;
+        // PHPMailer 7 has no ConnectTimeout property; Timeout controls both
+        // the connection attempt and SMTP response reads.
         $mail->Timeout        = $smtpTimeout;
         $mail->SMTPKeepAlive  = false; // Don't keep connection open (single send per request)
 
