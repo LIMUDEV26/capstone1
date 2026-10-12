@@ -1128,15 +1128,15 @@ export default function EmployeesPage() {
                         <table className="llb-table llb-pin-first" style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
                             <thead style={{ background: '#f8fafc' }}>
                                 <tr>
-                                    {['ID Count', 'Employee', 'Position', 'Type', 'Salary', 'Branch', 'Status', 'Payroll Readiness', 'Actions'].map((h) => (
-                                        <th key={h} style={th} className={h === 'ID Count' || h === 'Salary' ? 'llb-num' : undefined}>{h}</th>
+                                    {['ID Count', 'Employee', 'Position', 'Type', 'Branch', 'Status', 'Payroll Readiness', 'Actions'].map((h) => (
+                                        <th key={h} style={th} className={h === 'ID Count' ? 'llb-num' : undefined}>{h}</th>
                                     ))}
                                 </tr>
                             </thead>
                             <tbody>
                                 {paged.length === 0 && (
                                     <tr>
-                                        <td colSpan={9} style={{ ...td, textAlign: 'center', color: '#64748b' }}>
+                                        <td colSpan={8} style={{ ...td, textAlign: 'center', color: '#64748b' }}>
                                             {showArchiveView && !search.trim() ? 'No archived employees.' : (
                                                 <ZeroResults
                                                     query={search}
@@ -1168,7 +1168,6 @@ export default function EmployeesPage() {
                                         </td>
                                         <td style={td}>{row.position || '-'}</td>
                                         <td style={td}>{row.employment_type || '-'}</td>
-                                        <td style={td} className="llb-num">{money(row.salary)}</td>
                                         <td style={td}>{row.branch_name || 'Unassigned'}</td>
                                         <td style={td}><span style={statusPill(String(row.status || 'inactive'))}>{String(row.status || 'inactive').replace('_', ' ')}</span></td>
                                         <td style={td}>
