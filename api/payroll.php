@@ -282,7 +282,7 @@ function sendPayslipReleaseEmails($conn, $payrollIds) {
         $stmt = $conn->prepare("
             SELECT p.id AS payroll_id, e.email, e.first_name, e.last_name,
                    p.pay_period_start, p.pay_period_end, p.net_pay, p.gross_pay,
-                   p.total_deductions
+                   p.total_deductions, p.late_deduction, p.absence_deduction
             FROM payroll p
             JOIN employees e ON e.employee_id = p.employee_id
             WHERE p.id IN ($placeholders)
@@ -298,8 +298,12 @@ function sendPayslipReleaseEmails($conn, $payrollIds) {
             if (empty($rec['email'])) continue;
 
             $fullName = trim($rec['first_name'] . ' ' . $rec['last_name']);
-            $grossPay = floatval($rec['gross_pay'] ?? 0);
-            $deductions = floatval($rec['total_deductions'] ?? 0);
+            // Match payroll management: show gross before attendance deductions,
+            // and include attendance deductions in the displayed deduction total.
+            $attendanceDeductions = floatval($rec['late_deduction'] ?? 0)
+                + floatval($rec['absence_deduction'] ?? 0);
+            $grossPay = floatval($rec['gross_pay'] ?? 0) + $attendanceDeductions;
+            $deductions = floatval($rec['total_deductions'] ?? 0) + $attendanceDeductions;
             $netPay = floatval($rec['net_pay'] ?? 0);
 
             $html = buildPayslipReleaseEmail(
