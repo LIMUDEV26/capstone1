@@ -688,21 +688,26 @@ export default function Users() {
     // Restore user (silent core — callers confirm first)
     const doRestoreUser = async (userId: number) => {
         try {
-            const res = await fetch(`${API_BASE_URL}/api/users.php`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+            const res = await fetch(`${API_BASE_URL}/api/users.php?action=restore`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-No-Toast': '1' },
                 credentials: 'include',
-                body: JSON.stringify({ id: userId, status: 'active' })
+                body: JSON.stringify({ id: userId })
             });
-            const data = await res.json();
-            if (data.success) {
-                setUsers((prev) =>
-                    (prev || []).map((u) =>
-                        u.id === userId ? { ...u, status: 'active' } : u
-                    )
-                );
+            const responseText = await res.text();
+            let data: { success?: boolean; message?: string } = {};
+            try {
+                data = responseText ? JSON.parse(responseText) : {};
+            } catch {
+                throw new Error(responseText.trim() || `Request failed (${res.status})`);
             }
-        } catch (err) { console.error('Failed to restore user', err); }
+            if (!res.ok || !data.success) throw new Error(data.message || `Request failed (${res.status})`);
+            setUsers((prev) => (prev || []).map((u) => u.id === userId ? { ...u, status: 'active' } : u));
+            void notifySuccess(data.message || 'User restored successfully.');
+        } catch (err) {
+            console.error('Failed to restore user', err);
+            void notifyError(err instanceof Error ? err.message : 'Failed to restore user.');
+        }
     };
 
     const handleRestore = async (userId: number) => {

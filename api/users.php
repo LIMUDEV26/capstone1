@@ -46,6 +46,9 @@ switch ($method) {
         if ($postAction === 'unlock') {
             requireRole(['admin']);
             handleUnlock($conn);
+        } elseif ($postAction === 'restore') {
+            requireRole(['admin']);
+            handleRestoreUser($conn);
         } else {
             // Only admin can create users
             requireRole(['admin']);
@@ -1731,6 +1734,45 @@ function handleUnlock($conn) {
         'security');
 
     sendResponse(true, null, 'User account unlocked successfully');
+}
+
+/**
+ * POST ?action=restore — restore one archived user without running profile edits.
+ */
+function handleRestoreUser($conn) {
+    $data = getJSONInput();
+    $id = intval($data['id'] ?? 0);
+    if ($id <= 0) sendError('User ID is required', 400);
+
+    $stmt = $conn->prepare("SELECT role, branch_id, status FROM users WHERE id = ? LIMIT 1");
+    if (!$stmt) sendError('Failed to find archived user.', 500);
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $target = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$target) sendError('User not found.', 404);
+    if (strtolower((string)$target['status']) === 'active') {
+        sendResponse(true, null, 'User is already active.');
+    }
+    if (strtolower((string)$target['status']) !== 'inactive') {
+        sendError('Only archived users can be restored.', 409);
+    }
+
+    assertManagerBranchAvailability($conn, $target['role'] ?? '', $target['branch_id'] ?? null, $id);
+
+    $restore = $conn->prepare("UPDATE users SET status = 'active' WHERE id = ? AND status = 'inactive'");
+    if (!$restore) sendError('Failed to prepare user restore.', 500);
+    $restore->bind_param('i', $id);
+    if (!$restore->execute()) {
+        $restore->close();
+        error_log('Failed to restore user id=' . $id . ': ' . $conn->error);
+        sendError('Failed to restore user.', 500);
+    }
+    $restore->close();
+
+    logActivity($conn, intval($_SESSION['user_id'] ?? 0), 'restore_user', 'Restored user ID ' . $id, 'user_management');
+    sendResponse(true, null, 'User restored successfully.');
 }
 
 /**
