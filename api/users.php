@@ -885,7 +885,9 @@ function syncLinkedEmployeeFromUser($conn, $userId, $employeeId) {
     if (!$stmt) return;
 
     $first_name = normalizeNullableString($snapshot['first_name'] ?? null, 50);
-    $last_name = normalizeNullableString($snapshot['last_name'] ?? null, 50);
+    // Employees can have no family name; store an empty string so this sync
+    // works with schemas where employees.last_name is NOT NULL.
+    $last_name = normalizePersonName($snapshot['last_name'] ?? '', 50);
     $date_of_birth = normalizeNullableString($snapshot['date_of_birth'] ?? null, 10);
     $email = normalizeNullableString($snapshot['email'] ?? null, 100);
     $photo = normalizeNullableString($snapshot['photo'] ?? null, 255);

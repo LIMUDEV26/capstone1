@@ -930,7 +930,7 @@ export default function Users() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap', marginBottom: '12px', justifyContent: 'space-between' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <h1 style={{ fontSize: '14px', fontWeight: 'bold', color: '#1a202c', margin: 0 }}>
-                            {showArchiveView ? 'Archived Employees' : 'Users'}
+                            {showArchiveView ? 'Archived Employees' : 'Employees'}
                         </h1>
                         {!showArchiveView && user?.role !== 'staff' && (
                             <button onClick={openAddModal} title="Add Employee" aria-label="Add Employee" style={{ height: '40px', padding: '0 18px', background: '#1e3a8a', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -992,12 +992,12 @@ export default function Users() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'minmax(250px, 2fr) repeat(4, minmax(100px, 1fr))', gap: 12, alignItems: 'flex-end', background: '#fff', padding: '14px 16px', borderRadius: 12, border: '1px solid #e2e8f0', marginBottom: 12 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
                         <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                            Search Users
+                            Search Employees
                         </label>
                         <SearchBar
                             storageKey="users:list"
                             placeholder="Search employees..."
-                            ariaLabel="Search users"
+                            ariaLabel="Search employees"
                             value={searchTerm}
                             onChange={setSearchTerm}
                             suggestions={collectSearchTerms(users, [
@@ -1356,7 +1356,7 @@ export default function Users() {
                                 <div style={{ fontWeight: 700, color: '#1f2937', marginBottom: 10, fontSize: 13 }}>Personal Details</div>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', columnGap: 12, rowGap: 10, alignItems: 'start' }}>
                                 <div><label style={{ display: 'block', marginBottom: 4, color: '#555', fontSize: 13 }}>First Name{reqStar(isAddMode)}</label><input type="text" name="first_name" value={formData.first_name} onChange={handleInputChange} required aria-required="true" aria-invalid={fieldErrors.first_name ? true : undefined} style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: fieldErrors.first_name ? '2px solid #ef4444' : '1px solid #ccc', color: '#333', backgroundColor: 'white' }} />{fieldErrors.first_name && <div style={{ marginTop: 4, fontSize: 12, color: '#b91c1c' }}>{fieldErrors.first_name}</div>}</div>
-                                <div><label style={{ display: 'block', marginBottom: 4, color: '#555', fontSize: 13 }}>Last Name{reqStar(isAddMode)}</label><input type="text" name="last_name" value={formData.last_name} onChange={handleInputChange} required aria-required="true" aria-invalid={fieldErrors.last_name ? true : undefined} style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: fieldErrors.last_name ? '2px solid #ef4444' : '1px solid #ccc', color: '#333', backgroundColor: 'white' }} />{fieldErrors.last_name && <div style={{ marginTop: 4, fontSize: 12, color: '#b91c1c' }}>{fieldErrors.last_name}</div>}</div>
+                                <div><label style={{ display: 'block', marginBottom: 4, color: '#555', fontSize: 13 }}>Last Name{reqStar(isAddMode)}</label><input type="text" name="last_name" value={formData.last_name} onChange={handleInputChange} required={isAddMode} aria-required={isAddMode ? 'true' : undefined} aria-invalid={fieldErrors.last_name ? true : undefined} style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: fieldErrors.last_name ? '2px solid #ef4444' : '1px solid #ccc', color: '#333', backgroundColor: 'white' }} />{fieldErrors.last_name && <div style={{ marginTop: 4, fontSize: 12, color: '#b91c1c' }}>{fieldErrors.last_name}</div>}</div>
                                 <div><label style={{ display: 'block', marginBottom: 4, color: '#555', fontSize: 13 }}>Email{reqStar(isAddMode)}</label><input type="email" name="email" value={formData.email} onChange={handleInputChange} required aria-required="true" aria-invalid={fieldErrors.email ? true : undefined} pattern="^[^\s@]+@(gmail\.com|phinmaed\.com)$" title="Use a valid @gmail.com or @phinmaed.com email address." placeholder="example@phinmaed.com" style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: fieldErrors.email ? '2px solid #ef4444' : '1px solid #ccc', color: '#333', backgroundColor: 'white' }} />{fieldErrors.email && <div style={{ marginTop: 4, fontSize: 12, color: '#b91c1c' }}>{fieldErrors.email}</div>}</div>
                                 <div>
                                     <label style={{ display: 'block', marginBottom: 4, color: '#555', fontSize: 13 }}>Birthdate{reqStar(isAddMode)}</label>

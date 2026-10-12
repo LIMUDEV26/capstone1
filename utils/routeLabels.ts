@@ -48,7 +48,7 @@ const ROUTE_LABELS: Record<string, string> = {
   '/settings/session-timeout': 'Session Timeout Settings',
   '/settings/system-backup': 'System Backup Settings',
   '/shift-schedules': 'Shift Schedules',
-  '/users': 'Users',
+  '/users': 'Employees',
 };
 
 const BREADCRUMB_LABELS: Record<string, string> = {
