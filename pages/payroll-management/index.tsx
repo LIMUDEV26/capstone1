@@ -641,8 +641,8 @@ export default function PayrollManagement() {
     const hasReleasableSelection = selectedRecords.some(
         record => record.status !== 'approved' && record.status !== 'paid' && record.status !== 'archived'
     );
-    const hasArchivableSelection = selectedRecords.some(record => record.status === 'paid');
-    const selectedArchivableIds = selectedRecords.filter(record => record.status === 'paid').map(record => record.id);
+    const hasArchivableSelection = selectedRecords.some(record => record.status !== 'archived');
+    const selectedArchivableIds = selectedRecords.filter(record => record.status !== 'archived').map(record => record.id);
     const paginatedRecords = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
     // "Select All" covers the whole filtered list — every page, not just the rows
     // rendered on screen — so a bulk action reaches records further down the list.
@@ -997,8 +997,8 @@ export default function PayrollManagement() {
                 : `This will revert ${targetIds.length} payroll record(s) to approved.`)
             : isRestoreFromArchive
             ? (mode === 'single'
-                ? 'This will restore the selected archived payroll record and return it to active records as paid.'
-                : `This will restore ${targetIds.length} archived payroll record(s) and return them to active records as paid.`)
+                ? 'This will restore the selected payroll record to the status it had before it was archived.'
+                : `This will restore ${targetIds.length} payroll record(s) to their statuses from before they were archived.`)
             : nextStatus === 'approved' || nextStatus === 'paid'
             ? (mode === 'single'
                 ? 'This will release the selected payslip, make it available to the employee, and mark the payroll as paid.'
@@ -1985,7 +1985,7 @@ export default function PayrollManagement() {
                                                                     Edit
                                                                 </button>
                                                             )}
-                                                            {r.status === 'paid' && (
+                                                            {r.status !== 'archived' && (
                                                             <button
                                                                 type="button"
                                                                 className={`${s.actionMenuItem} ${s.actionMenuItemDanger}`}

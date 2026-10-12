@@ -630,6 +630,12 @@ function ensurePhaseOneTables($conn) {
         'storage_deleted_at',
         "ALTER TABLE payroll ADD COLUMN storage_deleted_at DATETIME NULL AFTER archived_at"
     );
+    ensureTableColumn(
+        $conn,
+        'payroll',
+        'archived_from_status',
+        "ALTER TABLE payroll ADD COLUMN archived_from_status VARCHAR(20) NULL AFTER archived_at"
+    );
     // Existing archived payroll gets a fresh five-year recovery window because
     // older installs did not record when the archive action happened.
     $conn->query("UPDATE payroll SET archived_at = NOW() WHERE status = 'archived' AND archived_at IS NULL");

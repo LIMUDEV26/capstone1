@@ -399,7 +399,7 @@ function handleBulkStatusUpdate($conn, $data) {
             $skippedCount++;
             continue;
         }
-        if ($status === 'archived' && $currentStatus !== 'paid') {
+        if ($status === 'archived' && !in_array($currentStatus, ['draft', 'pending', 'approved', 'paid'], true)) {
             $skippedCount++;
             continue;
         }
@@ -420,9 +420,9 @@ function handleBulkStatusUpdate($conn, $data) {
 
     $updatePlaceholders = buildInClause(count($eligibleIds));
     $updateSql = $status === 'archived'
-        ? "UPDATE payroll SET status = ?, archived_at = NOW() WHERE id IN ($updatePlaceholders)"
+        ? "UPDATE payroll SET archived_from_status = status, status = ?, archived_at = NOW() WHERE id IN ($updatePlaceholders)"
         : ($status === 'paid'
-            ? "UPDATE payroll SET status = ?, archived_at = CASE WHEN status = 'archived' THEN NULL ELSE archived_at END WHERE id IN ($updatePlaceholders)"
+            ? "UPDATE payroll SET status = CASE WHEN status = 'archived' THEN COALESCE(archived_from_status, 'paid') ELSE ? END, archived_at = NULL, archived_from_status = NULL WHERE id IN ($updatePlaceholders)"
             : "UPDATE payroll SET status = ?, archived_at = NULL WHERE id IN ($updatePlaceholders)");
     $updateStmt = $conn->prepare($updateSql);
     if (!$updateStmt) {
@@ -1060,14 +1060,20 @@ function handlePut($conn) {
     if ($statusOnlyRequest && $currentStatus === 'archived' && !$isRestoreTransition) {
         sendError('Archived payroll records can only be restored to paid status.', 400);
     }
-    if ($isArchiveTransition && $currentStatus !== 'paid') {
-        sendError('Only paid payroll records can be archived.', 400);
-    }
-
     if ($isArchiveTransition || $isRestoreTransition || $isMarkPaidTransition || $isRevertPaidTransition) {
-        $statusStmt = $conn->prepare("UPDATE payroll SET status = ?, archived_at = CASE WHEN ? = 'archived' THEN NOW() WHEN ? = 'paid' AND status = 'archived' THEN NULL ELSE archived_at END, storage_deleted_at = CASE WHEN ? = 'paid' THEN NULL ELSE storage_deleted_at END WHERE id = ?");
-        if (!$statusStmt) sendError('Failed to prepare payroll archive update.', 500);
-        $statusStmt->bind_param('ssssi', $requestedStatus, $requestedStatus, $requestedStatus, $requestedStatus, $payroll_id);
+        if ($isArchiveTransition) {
+            $statusStmt = $conn->prepare("UPDATE payroll SET archived_from_status = status, status = ?, archived_at = NOW() WHERE id = ?");
+            if (!$statusStmt) sendError('Failed to prepare payroll archive update.', 500);
+            $statusStmt->bind_param('si', $requestedStatus, $payroll_id);
+        } elseif ($isRestoreTransition) {
+            $statusStmt = $conn->prepare("UPDATE payroll SET status = COALESCE(archived_from_status, 'paid'), archived_at = NULL, archived_from_status = NULL, storage_deleted_at = NULL WHERE id = ?");
+            if (!$statusStmt) sendError('Failed to prepare payroll restore update.', 500);
+            $statusStmt->bind_param('i', $payroll_id);
+        } else {
+            $statusStmt = $conn->prepare("UPDATE payroll SET status = ?, archived_at = NULL, archived_from_status = NULL, storage_deleted_at = CASE WHEN ? = 'paid' THEN NULL ELSE storage_deleted_at END WHERE id = ?");
+            if (!$statusStmt) sendError('Failed to prepare payroll status update.', 500);
+            $statusStmt->bind_param('ssi', $requestedStatus, $requestedStatus, $payroll_id);
+        }
         if (!$statusStmt->execute()) {
             error_log($conn->error);
             sendError('Failed to update payroll archive status.', 500);
