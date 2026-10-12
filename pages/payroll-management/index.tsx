@@ -1443,6 +1443,7 @@ export default function PayrollManagement() {
             { key: 'skipped', label: 'Skipped', tone: '#f59e0b', bg: '#f8fafc', border: '#e2e8f0', count: Number(importResult.records_skipped) || 0, items: (details.skipped || []) as ImportDetailItem[] },
             { key: 'errors', label: 'Errors', tone: '#dc2626', bg: '#f8fafc', border: '#e2e8f0', count: errorItems.length, items: errorItems },
             { key: 'biometric_id', label: 'Biometric ID Matched', tone: '#1d4ed8', bg: '#eff6ff', border: '#dbeafe', count: Number(identity.matched_via_biometric_id) || 0, items: (details.matched_via_biometric_id || []) as ImportDetailItem[] },
+            { key: 'saved_source_id', label: 'Saved Source ID Matched', tone: '#1e40af', bg: '#eff6ff', border: '#dbeafe', count: Number(identity.matched_via_saved_source_id) || 0, items: (details.matched_via_saved_source_id || []) as ImportDetailItem[] },
             { key: 'base44', label: 'External Mapping Matched', tone: '#0369a1', bg: '#f0f9ff', border: '#e0f2fe', count: Number(identity.matched_via_base44) || 0, items: (details.matched_via_base44 || []) as ImportDetailItem[] },
             { key: 'smart_name', label: 'Smart Name Matched', tone: '#15803d', bg: '#f0fdf4', border: '#dcfce7', count: Number(identity.matched_via_smart_name) || 0, items: (details.matched_via_smart_name || []) as ImportDetailItem[] },
             { key: 'unresolved', label: 'Unresolved', tone: '#b91c1c', bg: '#fef2f2', border: '#fee2e2', count: Number(identity.unresolved) || 0, items: (details.unresolved || []) as ImportDetailItem[] },
@@ -2572,6 +2573,11 @@ export default function PayrollManagement() {
                                         {importResult.source_system && (
                                             <p style={{ color: '#64748b', fontSize: 13, margin: '4px 0 0' }}>Source: {importResult.source_system}</p>
                                         )}
+                                        {Number(importResult.review_pending_count) > 0 && (
+                                            <p style={{ color: '#b45309', fontSize: 13, margin: '6px 0 0' }}>
+                                                {importResult.review_pending_count} row(s) need an employee match before they can be imported.
+                                            </p>
+                                        )}
                                     </div>
                                     <div className={s.importStats}>
                                         {importCards.map((card) => (
@@ -2700,7 +2706,14 @@ export default function PayrollManagement() {
                         </div>
                         <div className={s.modalFooter}>
                             {importResult ? (
-                                <button className={s.btnPrimary} onClick={() => { resetImportSession(true); setShowImportModal(false); }}>Done</button>
+                                <>
+                                    {Number(importResult.review_pending_count) > 0 && importResult.review_url && (
+                                        <button className={s.btnSecondary} onClick={() => { setShowImportModal(false); void router.push(importResult.review_url); }}>
+                                            Review unmatched employees
+                                        </button>
+                                    )}
+                                    <button className={s.btnPrimary} onClick={() => { resetImportSession(true); setShowImportModal(false); }}>Done</button>
+                                </>
                             ) : (
                                 <>
                                     <button className={s.btnSecondary} onClick={() => { resetImportSession(true); setShowImportModal(false); }} disabled={importLoading}>Cancel</button>

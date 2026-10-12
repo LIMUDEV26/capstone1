@@ -522,6 +522,59 @@ function ensurePhaseOneTables($conn) {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
 
+    // Persist confirmed source-system IDs separately from internal employee
+    // IDs, and retain unresolved rows so an administrator can match them
+    // without losing the attendance data from the uploaded file.
+    $conn->query(
+        "CREATE TABLE IF NOT EXISTS attendance_employee_source_map (
+            map_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            source_system VARCHAR(60) NOT NULL,
+            external_code_key VARCHAR(190) NOT NULL,
+            external_employee_code VARCHAR(190) NOT NULL,
+            external_employee_name VARCHAR(190) NULL,
+            employee_id INT NOT NULL,
+            match_method VARCHAR(40) NOT NULL DEFAULT 'manual_review',
+            confirmed_by INT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_attendance_source_code (source_system, external_code_key),
+            INDEX idx_attendance_source_employee (employee_id),
+            CONSTRAINT fk_attendance_source_employee FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    $conn->query(
+        "CREATE TABLE IF NOT EXISTS attendance_import_review_items (
+            item_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            batch_id VARCHAR(50) NOT NULL,
+            row_number INT NOT NULL,
+            source_system VARCHAR(60) NOT NULL,
+            original_filename VARCHAR(255) NOT NULL DEFAULT '',
+            pay_period_start DATE NOT NULL,
+            pay_period_end DATE NOT NULL,
+            external_employee_code VARCHAR(190) NOT NULL DEFAULT '',
+            external_employee_name VARCHAR(190) NOT NULL DEFAULT '',
+            external_role VARCHAR(100) NOT NULL DEFAULT '',
+            external_branch VARCHAR(190) NOT NULL DEFAULT '',
+            days_worked DECIMAL(8,2) NOT NULL DEFAULT 0,
+            overtime_hours DECIMAL(8,2) NOT NULL DEFAULT 0,
+            late_minutes INT NOT NULL DEFAULT 0,
+            absent_days DECIMAL(8,2) NOT NULL DEFAULT 0,
+            leave_days DECIMAL(8,2) NOT NULL DEFAULT 0,
+            status VARCHAR(24) NOT NULL DEFAULT 'pending_review',
+            error_message TEXT NULL,
+            matched_employee_id INT NULL,
+            created_payroll_id INT NULL,
+            uploaded_by INT NULL,
+            reviewed_by INT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            reviewed_at TIMESTAMP NULL DEFAULT NULL,
+            UNIQUE KEY uq_attendance_review_batch_row (batch_id, row_number),
+            INDEX idx_attendance_review_batch_status (batch_id, status),
+            CONSTRAINT fk_attendance_review_employee FOREIGN KEY (matched_employee_id) REFERENCES employees(employee_id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
     ensureTableColumn(
         $conn,
         'deduction_type',

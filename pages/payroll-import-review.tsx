@@ -35,6 +35,7 @@ type BatchRow = {
   errors?: string[];
   identity_summary?: {
     matched_via_biometric_id?: number;
+    matched_via_saved_source_id?: number;
     matched_via_base44?: number;
     matched_via_smart_name?: number;
     unresolved?: number;
@@ -73,6 +74,7 @@ type ApiResponse<T> = {
 type BatchPayload = {
   batch: BatchRow;
   items: BatchItem[];
+  employees?: Array<{ employee_id: number; name: string }>;
 };
 
 export default function PayrollImportReviewPage() {
@@ -80,10 +82,12 @@ export default function PayrollImportReviewPage() {
   const batchId = String(router.query.batch_id || router.query.id || '').trim();
   const [user, setUser] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [batch, setBatch] = useState<BatchRow | null>(null);
   const [items, setItems] = useState<BatchItem[]>([]);
+  const [employees, setEmployees] = useState<Array<{ employee_id: number; name: string }>>([]);
+  const [selectedEmployeeByItem, setSelectedEmployeeByItem] = useState<Record<number, string>>({});
+  const [resolvingItemId, setResolvingItemId] = useState<number | null>(null);
 
   const role = String(user?.role || '').toLowerCase();
   const isAdmin = role === 'admin';
@@ -143,6 +147,7 @@ export default function PayrollImportReviewPage() {
       if (data.success && data.data) {
         setBatch(data.data.batch);
         setItems(Array.isArray(data.data.items) ? data.data.items : []);
+        setEmployees(Array.isArray(data.data.employees) ? data.data.employees : []);
       } else {
         if (!silent) {
           setBatch(null);
@@ -159,45 +164,36 @@ export default function PayrollImportReviewPage() {
     }
   };
 
-  const handleReview = async (action: 'approve_batch' | 'reject_batch') => {
-    if (!batch || !batchId) return;
-    setSubmitting(true);
+  const handleResolveRow = async (item: BatchItem) => {
+    const employeeId = Number(selectedEmployeeByItem[item.item_id] || 0);
+    if (!employeeId) {
+      setError('Select an existing employee for this attendance row.');
+      return;
+    }
+    setResolvingItemId(item.item_id);
     try {
-      const res = await fetch(`${API}/attendance_import.php`, {
-        method: 'PUT',
+      const res = await fetch(`${API}/attendance_import.php?action=resolve_row`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({
-          batch_id: batchId,
-          action,
-        }),
+        body: JSON.stringify({ item_id: item.item_id, employee_id: employeeId }),
       });
       const data = (await res.json()) as ApiResponse<unknown>;
       if (!data.success) {
-        setError(data.message || 'Failed to review attendance import batch.');
+        setError(data.message || 'Failed to match and import this attendance row.');
         return;
       }
-      if (action === 'approve_batch') {
-        setBatch(prev => prev ? {
-          ...prev,
-          status: 'processing',
-          review_note: 'Approved by admin. Processing payroll generation.',
-        } : prev);
-        void notifySuccess('Attendance import batch accepted. Payroll generation is now processing.');
-        void fetchBatch(true);
-      } else {
-        void notifySuccess('Attendance import batch rejected.');
-        setBatch(prev => prev ? { ...prev, status: 'rejected' } : prev);
-      }
+      void notifySuccess(data.message || 'Employee matched and attendance processed.');
+      await fetchBatch(true);
     } catch {
-      setError('Failed to review attendance import batch.');
+      setError('Failed to match and import this attendance row.');
     } finally {
-      setSubmitting(false);
+      setResolvingItemId(null);
     }
   };
 
-  const readyItems = useMemo(() => items.filter(item => item.status === 'ready'), [items]);
-  const skippedItems = useMemo(() => items.filter(item => item.status !== 'ready'), [items]);
+  const readyItems = useMemo(() => items.filter(item => item.status === 'pending_review'), [items]);
+  const skippedItems = useMemo(() => items.filter(item => item.status !== 'pending_review'), [items]);
   const isProcessingBatch = batch?.status === 'processing';
 
   const handleLogout = async () => {
@@ -224,22 +220,10 @@ export default function PayrollImportReviewPage() {
           <div>
             <h1 style={{ margin: 0, fontSize: 14, color: '#0f172a' }}>Payroll Import Review</h1>
             <p style={{ margin: '4px 0 0 0', color: '#64748b', fontSize: 13 }}>
-              Review staged biometric upload rows before processing them into draft payroll.
+              Match unresolved attendance rows to existing employee accounts. Confirming a match imports that row into draft payroll.
             </p>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button onClick={() => router.push('/manager/dashboard')} style={secondaryBtn}>Back to Dashboard</button>
-            {isAdmin && batch?.status === 'pending_review' && (
-              <>
-                <button onClick={() => void handleReview('reject_batch')} disabled={submitting} style={dangerBtn}>
-                  Reject Batch
-                </button>
-                <button onClick={() => void handleReview('approve_batch')} disabled={submitting} style={primaryBtn}>
-                  {submitting ? 'Processing...' : 'Process to Draft Payroll'}
-                </button>
-              </>
-            )}
-          </div>
+          <button onClick={() => router.push('/payroll-management')} style={secondaryBtn}>Back to Payroll</button>
         </div>
 
         {!batch ? (
@@ -262,10 +246,9 @@ export default function PayrollImportReviewPage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10, marginBottom: 12 }}>
               <SummaryCard label="Batch ID" value={batch.batch_id} />
               <SummaryCard label="Status" value={batch.status} />
-              <SummaryCard label="Ready Rows" value={String(batch.records_ready || 0)} />
-              <SummaryCard label="Skipped Rows" value={String(batch.records_skipped || 0)} />
-              <SummaryCard label="Processed Rows" value={String(batch.records_processed || 0)} />
-              <SummaryCard label="Failed Rows" value={String(batch.records_failed || 0)} />
+              <SummaryCard label="Rows Awaiting Match" value={String(readyItems.length)} />
+              <SummaryCard label="Rows Processed" value={String(skippedItems.filter(item => item.status === 'processed').length)} />
+              <SummaryCard label="Rows Requiring Review" value={String(skippedItems.filter(item => item.status !== 'processed').length)} />
             </div>
 
             <div style={{ ...cardStyle, marginBottom: 12 }}>
@@ -273,14 +256,12 @@ export default function PayrollImportReviewPage() {
                 <InfoTile label="Source File" value={batch.original_filename || '-'} />
                 <InfoTile label="Source System" value={batch.source_system || '-'} />
                 <InfoTile label="Pay Period" value={`${batch.pay_period_start} to ${batch.pay_period_end}`} />
-                <InfoTile label="Uploaded By" value={batch.uploaded_by_name || '-'} />
                 <InfoTile label="Uploaded At" value={new Date(batch.created_at).toLocaleString()} />
-                <InfoTile label="Reviewed By" value={batch.reviewed_by_name || '-'} />
               </div>
               {batch.identity_summary && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, marginTop: 12 }}>
                   <SummaryCard label="Biometric ID Matched" value={String(batch.identity_summary.matched_via_biometric_id || 0)} />
-                  <SummaryCard label="External Mapping Matched" value={String(batch.identity_summary.matched_via_base44 || 0)} />
+                  <SummaryCard label="Saved Source ID Matched" value={String(batch.identity_summary.matched_via_saved_source_id || 0)} />
                   <SummaryCard label="Smart Name Matched" value={String(batch.identity_summary.matched_via_smart_name || 0)} />
                   <SummaryCard label="Unresolved" value={String(batch.identity_summary.unresolved || 0)} />
                 </div>
@@ -304,13 +285,22 @@ export default function PayrollImportReviewPage() {
             </div>
 
             <div style={{ ...cardStyle, marginBottom: 12 }}>
-              <div style={sectionTitle}>Ready Rows ({readyItems.length})</div>
-              <BatchItemTable rows={readyItems} />
+              <div style={sectionTitle}>Rows Awaiting Employee Match ({readyItems.length})</div>
+              <BatchItemTable
+                rows={readyItems}
+                employees={employees}
+                selectedEmployeeByItem={selectedEmployeeByItem}
+                onSelectEmployee={(itemId, value) => setSelectedEmployeeByItem(prev => ({ ...prev, [itemId]: value }))}
+                onResolve={handleResolveRow}
+                resolvingItemId={resolvingItemId}
+                allowResolution={isAdmin}
+              />
+              {!isAdmin && readyItems.length > 0 && <p style={{ color: '#b45309', fontSize: 12 }}>An administrator must confirm employee matches.</p>}
             </div>
 
             <div style={cardStyle}>
-              <div style={sectionTitle}>Skipped / Processed Rows ({skippedItems.length})</div>
-              <BatchItemTable rows={skippedItems} />
+              <div style={sectionTitle}>Processed / Reviewed Rows ({skippedItems.length})</div>
+              <BatchItemTable rows={skippedItems} employees={[]} selectedEmployeeByItem={{}} onSelectEmployee={() => {}} onResolve={() => {}} resolvingItemId={null} allowResolution={false} />
             </div>
           </>
         )}
@@ -319,7 +309,23 @@ export default function PayrollImportReviewPage() {
   );
 }
 
-function BatchItemTable({ rows }: { rows: BatchItem[] }) {
+function BatchItemTable({
+  rows,
+  employees,
+  selectedEmployeeByItem,
+  onSelectEmployee,
+  onResolve,
+  resolvingItemId,
+  allowResolution,
+}: {
+  rows: BatchItem[];
+  employees: Array<{ employee_id: number; name: string }>;
+  selectedEmployeeByItem: Record<number, string>;
+  onSelectEmployee: (itemId: number, employeeId: string) => void;
+  onResolve: (item: BatchItem) => void;
+  resolvingItemId: number | null;
+  allowResolution: boolean;
+}) {
   if (rows.length === 0) {
     return <div style={{ color: '#64748b', fontSize: 13 }}>No rows in this section.</div>;
   }
@@ -336,6 +342,7 @@ function BatchItemTable({ rows }: { rows: BatchItem[] }) {
             <th style={thStyle}>Identity</th>
             <th style={thStyle}>Status</th>
             <th style={thStyle}>Notes</th>
+            <th style={thStyle}>Review Action</th>
           </tr>
         </thead>
         <tbody>
@@ -348,8 +355,22 @@ function BatchItemTable({ rows }: { rows: BatchItem[] }) {
                 <div style={{ color: '#64748b', fontSize: 12 }}>Branch: {row.external_branch || '-'}</div>
               </td>
               <td style={tdStyle}>
-                <div style={{ fontWeight: 700, color: '#0f172a' }}>{row.matched_employee_name || '-'}</div>
-                <div style={{ color: '#64748b', fontSize: 12 }}>Employee ID: {row.matched_employee_id || '-'}</div>
+                {row.status === 'pending_review' && allowResolution ? (
+                  <select
+                    value={selectedEmployeeByItem[row.item_id] || ''}
+                    onChange={event => onSelectEmployee(row.item_id, event.target.value)}
+                    aria-label={`Choose employee for ${row.external_employee_name || `row ${row.row_number}`}`}
+                    style={{ minWidth: 220, maxWidth: '100%', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: 8, background: '#fff' }}
+                  >
+                    <option value="">Select registered employee...</option>
+                    {employees.map(employee => <option key={employee.employee_id} value={employee.employee_id}>{employee.name} (#{employee.employee_id})</option>)}
+                  </select>
+                ) : (
+                  <>
+                    <div style={{ fontWeight: 700, color: '#0f172a' }}>{row.matched_employee_name || (row.matched_employee_id ? `Employee #${row.matched_employee_id}` : '-')}</div>
+                    <div style={{ color: '#64748b', fontSize: 12 }}>Employee ID: {row.matched_employee_id || '-'}</div>
+                  </>
+                )}
               </td>
               <td style={tdStyle}>
                 <div>Days Worked: {row.days_worked}</div>
@@ -371,6 +392,18 @@ function BatchItemTable({ rows }: { rows: BatchItem[] }) {
                 ) : null}
               </td>
               <td className="llb-trunc" title={row.error_message || '-'} style={tdStyle}>{row.error_message || '-'}</td>
+              <td style={tdStyle}>
+                {row.status === 'pending_review' && allowResolution ? (
+                  <button
+                    type="button"
+                    onClick={() => onResolve(row)}
+                    disabled={resolvingItemId !== null}
+                    style={primaryBtn}
+                  >
+                    {resolvingItemId === row.item_id ? 'Importing...' : 'Confirm & Import'}
+                  </button>
+                ) : row.status === 'pending_review' ? 'Admin match required' : '-'}
+              </td>
             </tr>
           ))}
         </tbody>

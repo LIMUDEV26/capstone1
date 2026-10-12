@@ -18,6 +18,7 @@
 require_once 'config.php';
 require_once 'utils.php';
 require_once 'chunked_upload_utils.php';
+require_once 'attendance_identity.php';
 
 const ATTENDANCE_IMPORT_CHUNK_MAX_BYTES = 100 * 1024 * 1024;
 const ATTENDANCE_IMPORT_CHUNK_ALLOWED_EXTS = ['dat', 'csv', 'xls', 'xlsx'];
@@ -35,7 +36,10 @@ try {
     switch ($method) {
         case 'GET':
             requireMinRole('manager');
-            handleGetTemplate();
+            $getAction = $_GET['action'] ?? '';
+            if ($getAction === 'template') handleGetTemplate();
+            elseif ($getAction === 'batch') handleGetReviewBatch($conn);
+            else sendError('Invalid action.', 400);
             break;
         case 'POST':
             requireMinRole('manager');
@@ -44,6 +48,10 @@ try {
             elseif ($importAction === 'import_chunk') handleImportChunk($conn);
             elseif ($importAction === 'import_complete') handleImportComplete($conn);
             elseif ($importAction === 'import_abort') handleImportAbort($conn);
+            elseif ($importAction === 'resolve_row') {
+                requireMinRole('admin');
+                handleResolveReviewRow($conn);
+            }
             else handleImport($conn);
             break;
         default:
@@ -866,6 +874,220 @@ function importDetailEntry($rowNum, $code, $name, $status, $detail = '', $employ
     ];
 }
 
+function fetchAttendanceSourceMappings($conn, $sourceSystem) {
+    $byCode = [];
+    $stmt = $conn->prepare(
+        "SELECT external_code_key, external_employee_code, external_employee_name, employee_id, match_method
+         FROM attendance_employee_source_map WHERE source_system = ?"
+    );
+    if (!$stmt) throw new RuntimeException('Failed to load saved attendance source-ID mappings.');
+    $stmt->bind_param('s', $sourceSystem);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    while ($result && ($row = $result->fetch_assoc())) {
+        $key = attendanceNormalizeSourceEmployeeCode($row['external_code_key'] ?? '');
+        if ($key !== '') $byCode[$key][] = $row;
+    }
+    $stmt->close();
+    return $byCode;
+}
+
+/** Save an automatic match without ever replacing a conflicting confirmed mapping. */
+function saveAttendanceSourceMapping($conn, $sourceSystem, $externalCode, $externalName, $employeeId, $matchMethod, $confirmedBy = null) {
+    $externalCode = normalizeIdentityValue($externalCode);
+    $codeKey = attendanceNormalizeSourceEmployeeCode($externalCode);
+    if ($codeKey === '') return true;
+
+    $insert = $conn->prepare(
+        "INSERT IGNORE INTO attendance_employee_source_map
+            (source_system, external_code_key, external_employee_code, external_employee_name, employee_id, match_method, confirmed_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?)"
+    );
+    if (!$insert) return false;
+    $insert->bind_param('ssssisi', $sourceSystem, $codeKey, $externalCode, $externalName, $employeeId, $matchMethod, $confirmedBy);
+    $insert->execute();
+    $insert->close();
+
+    $check = $conn->prepare(
+        "SELECT employee_id FROM attendance_employee_source_map WHERE source_system = ? AND external_code_key = ? LIMIT 1"
+    );
+    if (!$check) return false;
+    $check->bind_param('ss', $sourceSystem, $codeKey);
+    $check->execute();
+    $result = $check->get_result();
+    $row = $result ? $result->fetch_assoc() : null;
+    $check->close();
+    return $row && intval($row['employee_id'] ?? 0) === intval($employeeId);
+}
+
+function storeAttendanceReviewItem($conn, $batchId, $rowNumber, $sourceSystem, $fileName, $payPeriodStart, $payPeriodEnd, $code, $name, $role, $branch, $daysWorked, $overtimeHours, $lateMinutes, $absentDays, $leaveDays, $errorMessage) {
+    $stmt = $conn->prepare(
+        "INSERT INTO attendance_import_review_items
+            (batch_id, row_number, source_system, original_filename, pay_period_start, pay_period_end,
+             external_employee_code, external_employee_name, external_role, external_branch,
+             days_worked, overtime_hours, late_minutes, absent_days, leave_days, status, error_message, uploaded_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_review', ?, ?)"
+    );
+    if (!$stmt) throw new RuntimeException('Failed to save the unmatched attendance row for review.');
+    $userId = attendanceImportUserId();
+    $stmt->bind_param(
+        'sissssssssddiddsi',
+        $batchId, $rowNumber, $sourceSystem, $fileName, $payPeriodStart, $payPeriodEnd,
+        $code, $name, $role, $branch, $daysWorked, $overtimeHours, $lateMinutes,
+        $absentDays, $leaveDays, $errorMessage, $userId
+    );
+    if (!$stmt->execute()) {
+        $stmt->close();
+        throw new RuntimeException('Failed to save the unmatched attendance row for review.');
+    }
+    $id = intval($stmt->insert_id);
+    $stmt->close();
+    return $id;
+}
+
+function handleGetReviewBatch($conn) {
+    $batchId = trim((string)($_GET['id'] ?? ''));
+    if ($batchId === '') sendError('An attendance import batch ID is required.', 400);
+    $stmt = $conn->prepare(
+        "SELECT i.*, CONCAT(e.first_name, ' ', e.last_name) AS matched_employee_name
+         FROM attendance_import_review_items i
+         LEFT JOIN employees e ON e.employee_id = i.matched_employee_id
+         WHERE i.batch_id = ? ORDER BY i.row_number ASC, i.item_id ASC"
+    );
+    if (!$stmt) sendError('Failed to load attendance review rows.', 500);
+    $stmt->bind_param('s', $batchId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $items = [];
+    while ($result && ($row = $result->fetch_assoc())) $items[] = $row;
+    $stmt->close();
+    if (!$items) sendError('No attendance rows are awaiting review for this batch.', 404);
+
+    $pending = count(array_filter($items, static fn($item) => ($item['status'] ?? '') === 'pending_review'));
+    $processed = count(array_filter($items, static fn($item) => ($item['status'] ?? '') === 'processed'));
+    $employees = [];
+    $employeeResult = $conn->query(
+        "SELECT employee_id, first_name, last_name FROM employees WHERE status = 'active' ORDER BY first_name, last_name"
+    );
+    while ($employeeResult && ($employee = $employeeResult->fetch_assoc())) {
+        $employees[] = [
+            'employee_id' => intval($employee['employee_id']),
+            'name' => trim((string)$employee['first_name'] . ' ' . (string)$employee['last_name']),
+        ];
+    }
+    if ($employeeResult) $employeeResult->close();
+
+    $first = $items[0];
+    sendResponse(true, [
+        'batch' => [
+            'batch_id' => $batchId,
+            'source_system' => $first['source_system'],
+            'original_filename' => $first['original_filename'],
+            'pay_period_start' => $first['pay_period_start'],
+            'pay_period_end' => $first['pay_period_end'],
+            'status' => $pending > 0 ? 'pending_review' : 'processed',
+            'records_parsed' => count($items),
+            'records_ready' => $pending,
+            'records_skipped' => count($items) - $pending - $processed,
+            'records_processed' => $processed,
+            'records_failed' => count(array_filter($items, static fn($item) => ($item['status'] ?? '') === 'failed')),
+            'created_at' => $first['created_at'],
+        ],
+        'items' => $items,
+        'employees' => $employees,
+    ]);
+}
+
+function handleResolveReviewRow($conn) {
+    $payload = json_decode((string)file_get_contents('php://input'), true);
+    $itemId = intval($payload['item_id'] ?? 0);
+    $employeeId = intval($payload['employee_id'] ?? 0);
+    if ($itemId <= 0 || $employeeId <= 0) sendError('Select an existing employee to resolve this row.', 400);
+
+    $stmt = $conn->prepare(
+        "SELECT * FROM attendance_import_review_items WHERE item_id = ? LIMIT 1"
+    );
+    if (!$stmt) sendError('Failed to load the attendance review row.', 500);
+    $stmt->bind_param('i', $itemId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $item = $result ? $result->fetch_assoc() : null;
+    $stmt->close();
+    if (!$item) sendError('Attendance review row not found.', 404);
+    if (($item['status'] ?? '') !== 'pending_review') sendError('This row has already been resolved or processed.', 409);
+
+    $employeeStmt = $conn->prepare(
+        "SELECT employee_id, first_name, last_name FROM employees WHERE employee_id = ? AND status = 'active' LIMIT 1"
+    );
+    if (!$employeeStmt) sendError('Failed to validate the selected employee.', 500);
+    $employeeStmt->bind_param('i', $employeeId);
+    $employeeStmt->execute();
+    $employeeResult = $employeeStmt->get_result();
+    $employee = $employeeResult ? $employeeResult->fetch_assoc() : null;
+    $employeeStmt->close();
+    if (!$employee) sendError('Choose an active registered employee. No employee account was created.', 400);
+
+    $sourceSystem = normalizeImportSourceSystem($item['source_system'] ?? '');
+    $externalCode = normalizeIdentityValue($item['external_employee_code'] ?? '');
+    $employeeName = trim((string)$employee['first_name'] . ' ' . (string)$employee['last_name']);
+    if (!saveAttendanceSourceMapping($conn, $sourceSystem, $externalCode, (string)($item['external_employee_name'] ?? ''), $employeeId, 'manual_review', attendanceImportUserId())) {
+        // An explicit admin selection may correct a previous source mapping.
+        $mapStmt = $conn->prepare(
+            "INSERT INTO attendance_employee_source_map
+                (source_system, external_code_key, external_employee_code, external_employee_name, employee_id, match_method, confirmed_by)
+             VALUES (?, ?, ?, ?, ?, 'manual_review', ?)
+             ON DUPLICATE KEY UPDATE external_employee_code = VALUES(external_employee_code),
+                 external_employee_name = VALUES(external_employee_name), employee_id = VALUES(employee_id),
+                 match_method = 'manual_review', confirmed_by = VALUES(confirmed_by)"
+        );
+        if (!$mapStmt) sendError('Failed to save the confirmed source-ID mapping.', 500);
+        $codeKey = attendanceNormalizeSourceEmployeeCode($externalCode);
+        $reviewerId = attendanceImportUserId();
+        $mapStmt->bind_param('ssssii', $sourceSystem, $codeKey, $externalCode, $item['external_employee_name'], $employeeId, $reviewerId);
+        $mapStmt->execute();
+        $mapStmt->close();
+    }
+
+    $tempPath = tempnam(sys_get_temp_dir(), 'attendance_review_');
+    if ($tempPath === false) sendError('Could not prepare the reviewed attendance row.', 500);
+    $csv = fopen($tempPath, 'wb');
+    if (!$csv) {
+        @unlink($tempPath);
+        sendError('Could not prepare the reviewed attendance row.', 500);
+    }
+    fputcsv($csv, ATTENDANCE_IMPORT_TEMPLATE_HEADERS);
+    fputcsv($csv, [
+        $externalCode,
+        $employeeName,
+        (string)($item['external_role'] ?? ''),
+        (string)($item['external_branch'] ?? ''),
+        (string)$item['days_worked'],
+        (string)$item['overtime_hours'],
+        (string)$item['late_minutes'],
+        (string)$item['absent_days'],
+        (string)$item['leave_days'],
+    ]);
+    fclose($csv);
+    register_shutdown_function(static function () use ($tempPath) { @unlink($tempPath); });
+
+    $GLOBALS['attendanceImportReviewContext'] = [
+        'batch_id' => (string)$item['batch_id'],
+        'item_id' => $itemId,
+        'employee_id' => $employeeId,
+    ];
+    $_FILES['file'] = [
+        'name' => 'reviewed_attendance.csv',
+        'type' => 'text/csv',
+        'tmp_name' => $tempPath,
+        'error' => UPLOAD_ERR_OK,
+        'size' => filesize($tempPath),
+    ];
+    $_POST['pay_period_start'] = (string)$item['pay_period_start'];
+    $_POST['pay_period_end'] = (string)$item['pay_period_end'];
+    $_POST['source_system'] = $sourceSystem;
+    handleImport($conn);
+}
+
 /**
  * Sniff the leading bytes for a container that is not plain text. Returns a
  * human-readable label, or '' when the file starts like text.
@@ -954,9 +1176,13 @@ function handleImport($conn) {
         $statisticalReportRows = convertZktecoStatisticalReportRows($rows);
         if ($statisticalReportRows !== null) {
             $rows = $statisticalReportRows;
+            $sourceSystem = 'zkteco';
         } else {
             $cardReportRows = convertZktecoCardReportRows($rows);
-            if ($cardReportRows !== null) $rows = $cardReportRows;
+            if ($cardReportRows !== null) {
+                $rows = $cardReportRows;
+                $sourceSystem = 'zkteco';
+            }
         }
     }
     if (empty($rows)) {
@@ -986,10 +1212,14 @@ function handleImport($conn) {
     }
 
     $columnMap = array_flip($headers);
-    $batchId = 'ATT-' . date('Ymd-His') . '-' . substr(uniqid(), -5);
+    $reviewContext = $GLOBALS['attendanceImportReviewContext'] ?? null;
+    $batchId = is_array($reviewContext) && !empty($reviewContext['batch_id'])
+        ? (string)$reviewContext['batch_id']
+        : 'ATT-' . date('Ymd-His') . '-' . substr(uniqid(), -5);
     $created = 0;
     $updated = 0;
     $skipped = 0;
+    $reviewPending = 0;
     $errorsList = [];
     $warningsList = [];
     $incompletePayrollEmployees = [];
@@ -1004,6 +1234,7 @@ function handleImport($conn) {
     $skippedDetails = [];
     $identityDetails = [
         'matched_via_biometric_id' => [],
+        'matched_via_saved_source_id' => [],
         'matched_via_base44' => [],
         'matched_via_smart_name' => [],
         'unresolved' => [],
@@ -1011,6 +1242,7 @@ function handleImport($conn) {
     $identitySummary = [
         'source_system' => $sourceSystem,
         'matched_via_biometric_id' => 0,
+        'matched_via_saved_source_id' => 0,
         'matched_via_base44' => 0,
         'matched_via_smart_name' => 0,
         'unresolved' => 0,
@@ -1018,6 +1250,7 @@ function handleImport($conn) {
 
     $employeeDirectory = fetchAttendanceImportEmployeeDirectory($conn);
     $base44Mappings = fetchBase44IdentityMappings($sourceSystem);
+    $sourceMappings = fetchAttendanceSourceMappings($conn, $sourceSystem);
     if (!empty($base44Mappings['error'])) {
         $warningsList[] = buildBase44ImportWarning($base44Mappings['error']);
     }
@@ -1100,21 +1333,23 @@ function handleImport($conn) {
         if ($externalEmployeeCode === '' && $externalEmployeeName === '') {
             $skipped++;
             $identitySummary['unresolved']++;
-            $errorsList[] = "Row $rowNum: Missing EmployeeID and EmployeeName";
-            $missingEntry = importDetailEntry($rowNum, '', '', 'missing_identity', 'Missing EmployeeID and EmployeeName');
+            $message = 'This row has no employee ID or name to identify an existing employee.';
+            $errorsList[] = "Row $rowNum: $message";
+            $reviewItemId = storeAttendanceReviewItem($conn, $batchId, $rowNum, $sourceSystem, (string)$file['name'], $payPeriodStart, $payPeriodEnd, '', '', $externalRole, $externalBranch, $daysWorked, $otHours, $lateMinutes, $absentDays, $leaveDays, $message);
+            $reviewPending++;
+            $missingEntry = importDetailEntry($rowNum, '', '', 'pending_review', $message);
+            $missingEntry['review_item_id'] = $reviewItemId;
             $skippedDetails[] = $missingEntry;
             $identityDetails['unresolved'][] = $missingEntry;
             continue;
         }
 
-        $resolution = resolveImportedEmployee(
+        $resolution = attendanceResolveImportedEmployee(
             $employeeDirectory,
             $base44Mappings,
-            $sourceSystem,
+            $sourceMappings,
             $externalEmployeeCode,
-            $externalEmployeeName,
-            $externalRole,
-            $externalBranch
+            $externalEmployeeName
         );
 
         if (empty($resolution['ok'])) {
@@ -1123,6 +1358,9 @@ function handleImport($conn) {
             $errorMessage = trim((string)($resolution['message'] ?? 'Failed to resolve employee identity.'));
             // Recorded per row (the console list below stays de-duplicated).
             $unresolvedEntry = importDetailEntry($rowNum, $externalEmployeeCode, $externalEmployeeName, 'unresolved', $errorMessage);
+            $reviewItemId = storeAttendanceReviewItem($conn, $batchId, $rowNum, $sourceSystem, (string)$file['name'], $payPeriodStart, $payPeriodEnd, $externalEmployeeCode, $externalEmployeeName, $externalRole, $externalBranch, $daysWorked, $otHours, $lateMinutes, $absentDays, $leaveDays, $errorMessage);
+            $unresolvedEntry['review_item_id'] = $reviewItemId;
+            $reviewPending++;
             $skippedDetails[] = $unresolvedEntry;
             $identityDetails['unresolved'][] = $unresolvedEntry;
 
@@ -1161,10 +1399,35 @@ function handleImport($conn) {
             $skipped++;
             $identitySummary['unresolved']++;
             $errorsList[] = "Row $rowNum: Resolved employee identity was invalid";
-            $invalidEntry = importDetailEntry($rowNum, $externalEmployeeCode, $externalEmployeeName, 'invalid_identity', 'Resolved employee identity was invalid');
+            $message = 'Resolved employee identity was invalid';
+            $reviewItemId = storeAttendanceReviewItem($conn, $batchId, $rowNum, $sourceSystem, (string)$file['name'], $payPeriodStart, $payPeriodEnd, $externalEmployeeCode, $externalEmployeeName, $externalRole, $externalBranch, $daysWorked, $otHours, $lateMinutes, $absentDays, $leaveDays, $message);
+            $reviewPending++;
+            $invalidEntry = importDetailEntry($rowNum, $externalEmployeeCode, $externalEmployeeName, 'pending_review', $message);
+            $invalidEntry['review_item_id'] = $reviewItemId;
             $skippedDetails[] = $invalidEntry;
             $identityDetails['unresolved'][] = $invalidEntry;
             continue;
+        }
+
+        if (!saveAttendanceSourceMapping($conn, $sourceSystem, $externalEmployeeCode, $externalEmployeeName, $employeeId, (string)($resolution['method'] ?? 'name_match'))) {
+            $skipped++;
+            $identitySummary['unresolved']++;
+            $message = 'This source ID is already saved for a different employee. Review the mapping before importing.';
+            $reviewItemId = storeAttendanceReviewItem($conn, $batchId, $rowNum, $sourceSystem, (string)$file['name'], $payPeriodStart, $payPeriodEnd, $externalEmployeeCode, $externalEmployeeName, $externalRole, $externalBranch, $daysWorked, $otHours, $lateMinutes, $absentDays, $leaveDays, $message);
+            $reviewPending++;
+            $entry = importDetailEntry($rowNum, $externalEmployeeCode, $externalEmployeeName, 'pending_review', $message);
+            $entry['review_item_id'] = $reviewItemId;
+            $skippedDetails[] = $entry;
+            $identityDetails['unresolved'][] = $entry;
+            $errorsList[] = 'Row ' . $rowNum . ': ' . $message;
+            continue;
+        }
+        $sourceCodeKey = attendanceNormalizeSourceEmployeeCode($externalEmployeeCode);
+        if ($sourceCodeKey !== '') {
+            $sourceMappings[$sourceCodeKey] = [[
+                'employee_id' => $employeeId,
+                'match_method' => (string)($resolution['method'] ?? 'name_match'),
+            ]];
         }
 
         // Keep the import non-blocking while the company completes legacy
@@ -1184,6 +1447,16 @@ function handleImport($conn) {
                 $sourceNameForDetails,
                 'matched_via_biometric_id',
                 'File name: ' . ($externalEmployeeName !== '' ? $externalEmployeeName : '(not provided)') . '; matched registered employee "' . $employee['name'] . '" (#' . $employeeId . ') by exact ZKTeco Employee ID.',
+                $employeeId
+            );
+        } elseif (($resolution['method'] ?? '') === 'source_id_mapping') {
+            $identitySummary['matched_via_saved_source_id']++;
+            $identityDetails['matched_via_saved_source_id'][] = importDetailEntry(
+                $rowNum,
+                $externalEmployeeCode,
+                $sourceNameForDetails,
+                'matched_via_saved_source_id',
+                'Saved source ID ' . $externalEmployeeCode . ' matched registered employee "' . $employee['name'] . '" (#' . $employeeId . ').',
                 $employeeId
             );
         } elseif (($resolution['method'] ?? '') === 'smart_name_match') {
@@ -1223,12 +1496,59 @@ function handleImport($conn) {
         $duplicateResult = $duplicateStmt->get_result();
         $existingPayroll = $duplicateResult ? $duplicateResult->fetch_assoc() : null;
         $duplicateStmt->close();
+
+        // A one-day difference in the selected period must not create a
+        // second draft for the same employee over the same dates. Exact
+        // period matches win; otherwise reuse a single overlapping record.
+        // If several records overlap, stop and ask for review instead of
+        // guessing which draft should be changed.
+        if (!$existingPayroll) {
+            $overlapStmt = $conn->prepare(
+                "SELECT *
+                 FROM payroll
+                 WHERE employee_id = ? AND pay_period_start <= ? AND pay_period_end >= ?
+                 ORDER BY CASE WHEN LOWER(status) = 'draft' THEN 1 ELSE 0 END, id DESC"
+            );
+            if (!$overlapStmt) {
+                throw new RuntimeException('Failed to check overlapping payroll records.');
+            }
+            $overlapStmt->bind_param('iss', $employeeId, $payPeriodEnd, $payPeriodStart);
+            $overlapStmt->execute();
+            $overlapResult = $overlapStmt->get_result();
+            $overlappingPayrolls = [];
+            if ($overlapResult) {
+                while ($overlapRow = $overlapResult->fetch_assoc()) {
+                    $overlappingPayrolls[] = $overlapRow;
+                }
+            }
+            $overlapStmt->close();
+
+            if (count($overlappingPayrolls) === 1) {
+                $existingPayroll = $overlappingPayrolls[0];
+            } elseif (count($overlappingPayrolls) > 1) {
+                $skipped++;
+                $message = 'More than one payroll record overlaps this period. No record was changed; review the existing drafts to avoid duplicate pay.';
+                $errorsList[] = 'Row ' . $rowNum . ': ' . $message;
+                $skippedDetails[] = importDetailEntry(
+                    $rowNum,
+                    $externalEmployeeCode,
+                    $externalEmployeeName !== '' ? $externalEmployeeName : $employee['name'],
+                    'overlapping_payroll',
+                    $message,
+                    $employeeId
+                );
+                continue;
+            }
+        }
+
         $existingPayrollId = intval($existingPayroll['id'] ?? 0);
         if ($existingPayrollId > 0 && strtolower(trim((string)($existingPayroll['status'] ?? ''))) !== 'draft') {
             $skipped++;
             $duplicatePayrollEmployees[$employeeId] = true;
             $existingStatus = trim((string)($existingPayroll['status'] ?? 'finalized'));
-            $skippedDetails[] = importDetailEntry($rowNum, $externalEmployeeCode, $externalEmployeeName !== '' ? $externalEmployeeName : $employee['name'], 'duplicate', 'Payroll #' . $existingPayrollId . ' already exists for ' . $payPeriodStart . ' to ' . $payPeriodEnd . ' with status "' . $existingStatus . '". It was left unchanged.', $employeeId, $existingPayrollId);
+            $existingStart = trim((string)($existingPayroll['pay_period_start'] ?? $payPeriodStart));
+            $existingEnd = trim((string)($existingPayroll['pay_period_end'] ?? $payPeriodEnd));
+            $skippedDetails[] = importDetailEntry($rowNum, $externalEmployeeCode, $externalEmployeeName !== '' ? $externalEmployeeName : $employee['name'], 'duplicate', 'Payroll #' . $existingPayrollId . ' already exists for ' . $existingStart . ' to ' . $existingEnd . ' with status "' . $existingStatus . '". It was left unchanged.', $employeeId, $existingPayrollId);
             continue;
         }
 
@@ -1318,18 +1638,32 @@ function handleImport($conn) {
         }
         $importNote = 'Attendance imported: ' . implode(', ', $attendanceNoteParts) . '.';
 
-        $attendanceStmt = $existingPayrollId > 0
-            ? $conn->prepare(
-            "UPDATE attendance_records
-             SET days_worked = ?, overtime_hours = ?, late_minutes = ?, absent_days = ?, leave_days = ?, import_batch_id = ?
+        $attendanceOldStart = trim((string)($existingPayroll['pay_period_start'] ?? $payPeriodStart));
+        $attendanceOldEnd = trim((string)($existingPayroll['pay_period_end'] ?? $payPeriodEnd));
+        $attendanceLookup = $conn->prepare(
+            "SELECT id FROM attendance_records
              WHERE employee_id = ? AND pay_period_start = ? AND pay_period_end = ?
              ORDER BY id DESC LIMIT 1"
-        ) : $conn->prepare(
-            "INSERT INTO attendance_records
-                (employee_id, pay_period_start, pay_period_end, days_worked, overtime_hours,
-                 late_minutes, absent_days, leave_days, import_batch_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
+        if (!$attendanceLookup) throw new RuntimeException('Failed to check existing attendance records.');
+        $attendanceLookup->bind_param('iss', $employeeId, $attendanceOldStart, $attendanceOldEnd);
+        $attendanceLookup->execute();
+        $attendanceLookupResult = $attendanceLookup->get_result();
+        $existingAttendance = $attendanceLookupResult ? $attendanceLookupResult->fetch_assoc() : null;
+        $attendanceLookup->close();
+        $attendanceId = intval($existingAttendance['id'] ?? 0);
+        $attendanceStmt = $attendanceId > 0
+            ? $conn->prepare(
+                "UPDATE attendance_records
+                 SET pay_period_start = ?, pay_period_end = ?, days_worked = ?, overtime_hours = ?, late_minutes = ?, absent_days = ?, leave_days = ?, import_batch_id = ?
+                 WHERE id = ?"
+            )
+            : $conn->prepare(
+                "INSERT INTO attendance_records
+                    (employee_id, pay_period_start, pay_period_end, days_worked, overtime_hours,
+                     late_minutes, absent_days, leave_days, import_batch_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            );
         if (!$attendanceStmt) {
             throw new RuntimeException('Failed to prepare attendance import storage.');
         }
@@ -1353,35 +1687,23 @@ function handleImport($conn) {
 
         $conn->begin_transaction();
         try {
-            if ($existingPayrollId > 0) {
-                $attendanceStmt->bind_param('ddiddsiss', $daysWorked, $otHours, $lateMinutes, $absentDays, $leaveDays, $batchId, $employeeId, $payPeriodStart, $payPeriodEnd);
+            if ($attendanceId > 0) {
+                $attendanceStmt->bind_param('ssddiddsi', $payPeriodStart, $payPeriodEnd, $daysWorked, $otHours, $lateMinutes, $absentDays, $leaveDays, $batchId, $attendanceId);
             } else {
                 $attendanceStmt->bind_param('issddidds', $employeeId, $payPeriodStart, $payPeriodEnd, $daysWorked, $otHours, $lateMinutes, $absentDays, $leaveDays, $batchId);
             }
             $attendanceStmt->execute();
-            if ($existingPayrollId > 0 && $attendanceStmt->affected_rows === 0) {
-                $attendanceInsertStmt = $conn->prepare(
-                    "INSERT INTO attendance_records
-                        (employee_id, pay_period_start, pay_period_end, days_worked, overtime_hours,
-                         late_minutes, absent_days, leave_days, import_batch_id)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-                );
-                if (!$attendanceInsertStmt) throw new RuntimeException('Failed to prepare attendance record repair.');
-                $attendanceInsertStmt->bind_param('issddidds', $employeeId, $payPeriodStart, $payPeriodEnd, $daysWorked, $otHours, $lateMinutes, $absentDays, $leaveDays, $batchId);
-                $attendanceInsertStmt->execute();
-                $attendanceInsertStmt->close();
-            }
 
             if ($existingPayrollId > 0) {
                 $payrollUpdateStmt = $conn->prepare(
-                    "UPDATE payroll SET employee_name = ?, basic_salary = ?, overtime_hours = ?, overtime_rate = ?, overtime_pay = ?,
+                    "UPDATE payroll SET employee_name = ?, pay_period_start = ?, pay_period_end = ?, basic_salary = ?, overtime_hours = ?, overtime_rate = ?, overtime_pay = ?,
                      late_deduction = ?, absence_deduction = ?, unpaid_leave_days = ?, unpaid_leave_amount = ?, total_deductions = ?,
                      gross_pay = ?, net_pay = ?, notes = ? WHERE id = ? AND LOWER(status) = 'draft'"
                 );
                 if (!$payrollUpdateStmt) throw new RuntimeException('Failed to prepare draft payroll update.');
                 $payrollUpdateStmt->bind_param(
-                    's' . str_repeat('d', 11) . 'si',
-                    $employee['name'], $basicSalary, $otHours, $otRate, $otPay, $lateDeduction, $absenceDeduction,
+                    'sss' . str_repeat('d', 11) . 'si',
+                    $employee['name'], $payPeriodStart, $payPeriodEnd, $basicSalary, $otHours, $otRate, $otPay, $lateDeduction, $absenceDeduction,
                     $leaveImpactDays, $leaveImpactAmount, $totalDeductions, $grossPay, $netPay, $importNote, $existingPayrollId
                 );
                 $payrollUpdateStmt->execute();
@@ -1434,6 +1756,21 @@ function handleImport($conn) {
             } else {
                 $created++;
             }
+            if (is_array($reviewContext) && intval($reviewContext['item_id'] ?? 0) > 0) {
+                $reviewUpdate = $conn->prepare(
+                    "UPDATE attendance_import_review_items
+                     SET status = 'processed', matched_employee_id = ?, created_payroll_id = ?, error_message = NULL,
+                         reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP
+                     WHERE item_id = ? AND status = 'pending_review'"
+                );
+                if ($reviewUpdate) {
+                    $reviewItemId = intval($reviewContext['item_id']);
+                    $reviewerId = attendanceImportUserId();
+                    $reviewUpdate->bind_param('iiii', $employeeId, $payrollId, $reviewerId, $reviewItemId);
+                    $reviewUpdate->execute();
+                    $reviewUpdate->close();
+                }
+            }
             $successDetail = importDetailEntry(
                 $rowNum,
                 $externalEmployeeCode,
@@ -1473,6 +1810,20 @@ function handleImport($conn) {
                 $warningsList[] = "$duplicateCount existing payroll record(s) were skipped to prevent duplicate payments.";
             }
         }
+
+    $pendingReviewStmt = $conn->prepare(
+        "SELECT COUNT(*) AS pending_count
+         FROM attendance_import_review_items
+         WHERE batch_id = ? AND status = 'pending_review'"
+    );
+    if ($pendingReviewStmt) {
+        $pendingReviewStmt->bind_param('s', $batchId);
+        $pendingReviewStmt->execute();
+        $pendingReviewResult = $pendingReviewStmt->get_result();
+        $pendingReviewRow = $pendingReviewResult ? $pendingReviewResult->fetch_assoc() : null;
+        $reviewPending = intval($pendingReviewRow['pending_count'] ?? $reviewPending);
+        $pendingReviewStmt->close();
+    }
 
         $userId = checkAuthentication();
         releaseSessionLock();
@@ -1542,6 +1893,8 @@ function handleImport($conn) {
             'records_created' => $created,
             'records_updated' => $updated,
             'records_skipped' => $skipped,
+            'review_pending_count' => $reviewPending,
+            'review_url' => $reviewPending > 0 ? '/payroll-import-review?batch_id=' . rawurlencode($batchId) : null,
             'errors' => $errorsList,
             'warnings' => $warningsList,
             'identity_summary' => $identitySummary,
@@ -1551,6 +1904,7 @@ function handleImport($conn) {
                 'updated' => $updatedDetails,
                 'skipped' => $skippedDetails,
                 'matched_via_biometric_id' => $identityDetails['matched_via_biometric_id'],
+                'matched_via_saved_source_id' => $identityDetails['matched_via_saved_source_id'],
                 'matched_via_base44' => $identityDetails['matched_via_base44'],
                 'matched_via_smart_name' => $identityDetails['matched_via_smart_name'],
                 'unresolved' => $identityDetails['unresolved'],
