@@ -312,9 +312,33 @@ function normalizeIdentityValue($value) {
 }
 
 function normalizeIdentityKey($value) {
-    $normalized = strtolower(normalizeIdentityValue($value));
+    $normalized = normalizeIdentityValue($value);
+    // Spreadsheet exports can contain non-breaking spaces, zero-width marks,
+    // or accented characters even when the name looks identical on screen.
+    $normalized = preg_replace('/[\x{200B}-\x{200D}\x{FEFF}]/u', '', $normalized) ?? $normalized;
+    if (function_exists('iconv')) {
+        $ascii = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $normalized);
+        if (is_string($ascii)) $normalized = $ascii;
+    }
+    $normalized = strtolower($normalized);
     $normalized = preg_replace('/[^a-z0-9]+/', '', $normalized);
     return is_string($normalized) ? $normalized : '';
+}
+
+/** Ignore middle initials only as a fallback; caller must still find one unique employee. */
+function normalizeIdentityNameCoreKey($value) {
+    $normalized = normalizeIdentityValue($value);
+    $normalized = preg_replace('/[\x{200B}-\x{200D}\x{FEFF}]/u', '', $normalized) ?? $normalized;
+    if (function_exists('iconv')) {
+        $ascii = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $normalized);
+        if (is_string($ascii)) $normalized = $ascii;
+    }
+    preg_match_all('/[a-z0-9]+/i', strtolower($normalized), $matches);
+    $nameParts = array_values(array_filter(
+        $matches[0] ?? [],
+        static fn($part) => strlen($part) > 1
+    ));
+    return implode('', $nameParts);
 }
 
 function isSequentialArray($value) {
@@ -544,6 +568,7 @@ function fetchAttendanceImportEmployeeDirectory($conn) {
     $list = [];
     $byId = [];
     $byName = [];
+    $byNameCore = [];
     $byDateId = [];
 
     while ($row = $result->fetch_assoc()) {
@@ -551,6 +576,7 @@ function fetchAttendanceImportEmployeeDirectory($conn) {
         $lastName = trim((string)($row['last_name'] ?? ''));
         $fullName = trim(preg_replace('/\s+/', ' ', $firstName . ' ' . $lastName));
         $normalizedFullName = normalizeIdentityKey($fullName);
+        $normalizedNameCore = normalizeIdentityNameCoreKey($fullName);
 
         $employee = [
             'employee_id' => intval($row['employee_id'] ?? 0),
@@ -580,6 +606,7 @@ function fetchAttendanceImportEmployeeDirectory($conn) {
             'document_diploma_tor' => intval($row['document_diploma_tor'] ?? 0),
             'document_employment_contract' => intval($row['document_employment_contract'] ?? 0),
             'normalized_full_name' => $normalizedFullName,
+            'normalized_name_core' => $normalizedNameCore,
             'normalized_employee_date_id' => normalizeIdentityKey($row['employee_date_id'] ?? ''),
             'normalized_branch' => normalizeIdentityKey($row['branch_name'] ?? ''),
             'normalized_role' => normalizeIdentityKey($row['linked_user_role'] ?? ''),
@@ -591,6 +618,10 @@ function fetchAttendanceImportEmployeeDirectory($conn) {
         if ($normalizedFullName !== '') {
             if (!isset($byName[$normalizedFullName])) $byName[$normalizedFullName] = [];
             $byName[$normalizedFullName][] = $employee;
+        }
+        if ($normalizedNameCore !== '') {
+            if (!isset($byNameCore[$normalizedNameCore])) $byNameCore[$normalizedNameCore] = [];
+            $byNameCore[$normalizedNameCore][] = $employee;
         }
 
         $dateIdKey = normalizeIdentityKey($row['employee_date_id'] ?? '');
@@ -604,6 +635,7 @@ function fetchAttendanceImportEmployeeDirectory($conn) {
         'list' => $list,
         'by_id' => $byId,
         'by_name' => $byName,
+        'by_name_core' => $byNameCore,
         'by_date_id' => $byDateId,
     ];
 }
@@ -745,6 +777,17 @@ function resolveImportedEmployee($employeeDirectory, $base44Mappings, $sourceSys
     // from the IDs stored in the employee profile. This supports changed IDs
     // while still ensuring that the row maps only to an existing employee.
     $uniqueNameMatches = $employeeDirectory['by_name'][$externalNameKey] ?? [];
+    $nameMatchMethod = 'exact_unique_name';
+    if (count($uniqueNameMatches) === 0) {
+        $nameCoreKey = normalizeIdentityNameCoreKey($externalEmployeeName);
+        $coreNameMatches = $nameCoreKey !== ''
+            ? ($employeeDirectory['by_name_core'][$nameCoreKey] ?? [])
+            : [];
+        if (count($coreNameMatches) === 1) {
+            $uniqueNameMatches = $coreNameMatches;
+            $nameMatchMethod = 'unique_name_without_initials';
+        }
+    }
     $idMatches = $employeeDirectory['by_date_id'][$externalCodeKey] ?? [];
     if (count($uniqueNameMatches) === 1) {
         $employee = $uniqueNameMatches[0];
@@ -753,11 +796,20 @@ function resolveImportedEmployee($employeeDirectory, $base44Mappings, $sourceSys
         return buildResolvedEmployeeMatch(
             $employee,
             $idMatchesSameEmployee ? 'employee_date_id_match' : 'smart_name_match',
-            $idMatchesSameEmployee ? 'Biometric ID and employee name matched' : 'Exact employee name matched; attendance ID differs',
+            $idMatchesSameEmployee
+                ? 'Biometric ID and employee name matched'
+                : ($nameMatchMethod === 'unique_name_without_initials'
+                    ? 'Unique employee name matched after ignoring initials; attendance ID differs'
+                    : 'Exact employee name matched; attendance ID differs'),
             $idMatchesSameEmployee ? 1.0 : 0.96,
             $idMatchesSameEmployee
                 ? ['EmployeeID and EmployeeName matched the same employee record']
-                : ['File EmployeeName uniquely matched an existing employee; file EmployeeID ' . $externalEmployeeCode . ' was not used as the employee identity']
+                : [
+                    $nameMatchMethod === 'unique_name_without_initials'
+                        ? 'File EmployeeName uniquely matched an existing employee after ignoring middle initials'
+                        : 'File EmployeeName uniquely matched an existing employee',
+                    'File EmployeeID ' . $externalEmployeeCode . ' was not used as the employee identity',
+                ]
         );
     }
 
@@ -767,7 +819,7 @@ function resolveImportedEmployee($employeeDirectory, $base44Mappings, $sourceSys
 
     return [
         'ok' => false,
-        'message' => 'The uploaded EmployeeName does not uniquely match an existing employee. This row was skipped, even though its EmployeeID is present.',
+        'message' => 'The uploaded EmployeeName "' . $externalEmployeeName . '" does not uniquely match one active employee profile. The file ID is present, but it is not the system employee ID, so this row was skipped rather than assigned to the wrong employee.',
     ];
 }
 function attendanceImportUserId() {
