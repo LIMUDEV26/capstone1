@@ -87,11 +87,20 @@ export function createProgressTracker(totalBytes: number, onProgress: (p: Upload
 }
 
 async function readJsonSafe(res: Response): Promise<any> {
+    const text = await res.text();
     try {
-        return await res.json();
+        return text ? JSON.parse(text) : {};
     } catch {
-        return {};
+        return { __rawResponseText: text };
     }
+}
+
+function uploadResponseError(data: any, status: number, stage: string): string {
+    if (data?.message) return String(data.message);
+    if (String(data?.__rawResponseText || '').trim()) {
+        return `${stage} failed (status ${status}); the server returned a non-JSON error response. Check the backend logs for details.`;
+    }
+    return `${stage} failed (status ${status})`;
 }
 
 export class ChunkedUploadError extends Error {
@@ -126,7 +135,7 @@ async function initSession(
     });
     const data = await readJsonSafe(res);
     if (!res.ok || !data?.success || !data?.data?.upload_id) {
-        throw new ChunkedUploadError(String(data?.message || `Upload init failed (status ${res.status})`), res.status);
+        throw new ChunkedUploadError(uploadResponseError(data, res.status, 'Upload initialization'), res.status);
     }
     return { uploadId: String(data.data.upload_id), received: Number(data.data.received || 0) };
 }
@@ -196,7 +205,7 @@ async function completeSession(baseUrl: string, completeAction: string, uploadId
     });
     const data = await readJsonSafe(res);
     if (!res.ok || !data?.success) {
-        throw new ChunkedUploadError(String(data?.message || `Finalizing upload failed (status ${res.status})`), res.status);
+        throw new ChunkedUploadError(uploadResponseError(data, res.status, 'Finalizing upload'), res.status);
     }
     return data;
 }

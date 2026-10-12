@@ -29,10 +29,21 @@ setCORSHeaders();
 
 $method = getRequestMethod();
 $conn = getDBConnection();
-ensurePhaseOneTables($conn);
-ensurePayrollLeaveColumns($conn);
 
 try {
+    // Starting/resuming an upload only touches the filesystem; doing runtime
+    // schema DDL before routing made an unrelated migration failure look like
+    // "Upload init failed (status 500)" and prevented any file from uploading.
+    // Initialize storage only on requests that read/write payroll import data.
+    $getAction = $_GET['action'] ?? '';
+    $postAction = $_GET['action'] ?? 'import';
+    $needsImportSchema = ($method === 'GET' && $getAction === 'batch')
+        || ($method === 'POST' && !in_array($postAction, ['import_init', 'import_chunk', 'import_abort'], true));
+    if ($needsImportSchema) {
+        ensurePhaseOneTables($conn);
+        ensurePayrollLeaveColumns($conn);
+    }
+
     switch ($method) {
         case 'GET':
             requireMinRole('manager');
