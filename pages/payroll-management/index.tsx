@@ -1974,15 +1974,17 @@ export default function PayrollManagement() {
                                                             View
                                                         </button>
                                                         {canManage && <>
-                                                            <button
-                                                                type="button"
-                                                                className={s.actionMenuItem}
-                                                                disabled={rowBusy}
-                                                                role="menuitem"
-                                                                onClick={() => { setOpenActionsId(null); openEdit(r); }}
-                                                            >
-                                                                Edit
-                                                            </button>
+                                                            {r.status !== 'archived' && (
+                                                                <button
+                                                                    type="button"
+                                                                    className={s.actionMenuItem}
+                                                                    disabled={rowBusy}
+                                                                    role="menuitem"
+                                                                    onClick={() => { setOpenActionsId(null); openEdit(r); }}
+                                                                >
+                                                                    Edit
+                                                                </button>
+                                                            )}
                                                             {r.status === 'paid' && (
                                                             <button
                                                                 type="button"
