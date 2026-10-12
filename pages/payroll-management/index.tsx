@@ -1178,9 +1178,9 @@ export default function PayrollManagement() {
     const deleteArchivedPayroll = async (record: PayrollRecord) => {
         const employeeName = record.full_employee_name || record.employee_name || 'this employee';
         const confirmed = await confirmAction({
-            title: 'Delete payroll record permanently?',
-            text: `This permanently deletes ${employeeName}'s archived payroll record for ${record.pay_period_start} to ${record.pay_period_end}. You can then import this employee's attendance for that period again.`,
-            confirmButtonText: 'Delete permanently',
+            title: 'Move payroll record to Data Storage?',
+            text: `${employeeName}'s archived payroll record for ${record.pay_period_start} to ${record.pay_period_end} will be moved to Settings > Data Storage. You can restore it there or permanently delete it.`,
+            confirmButtonText: 'Delete',
             icon: 'warning',
             danger: true,
         });
@@ -2012,7 +2012,7 @@ export default function PayrollManagement() {
                                                                     role="menuitem"
                                                                     onClick={() => { setOpenActionsId(null); void deleteArchivedPayroll(r); }}
                                                                 >
-                                                                    Delete permanently
+                                                                    Delete
                                                                 </button>
                                                             </>
                                                             )}

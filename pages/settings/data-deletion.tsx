@@ -418,7 +418,7 @@ export default function DataDeletionSettingsPage() {
                 subtitle: 'Archived payroll records',
                 emptyText: 'No archived payroll records available to restore.',
                 load: async () => {
-                    const payload = await requestJson<Record<string, unknown>[]>(`${API_BASE}/payroll.php?status=archived`);
+                    const payload = await requestJson<Record<string, unknown>[]>(`${API_BASE}/payroll.php?status=archived&include_archived=1&storage_deleted=1`);
                     if (!payload.success || !Array.isArray(payload.data)) return [];
                     return payload.data.map((entry) => {
                         const row = objectValue(entry);
@@ -434,12 +434,12 @@ export default function DataDeletionSettingsPage() {
                             title: fullName || employeeName || `Payroll #${id}`,
                             meta: `${periodStart} to ${periodEnd}`,
                             isArchived: true,
-                            archivedAt,
+                            archivedAt: stringValue(row.storage_deleted_at) || archivedAt,
                         };
                     });
                 },
                 deleteOne: (id: number) =>
-                    requestJson(`${API_BASE}/payroll.php?id=${id}`, { method: 'DELETE' }),
+                    requestJson(`${API_BASE}/payroll.php?id=${id}&permanent=1`, { method: 'DELETE' }),
                 restoreOne: (id: number) =>
                     requestJson(`${API_BASE}/payroll.php`, {
                         method: 'PUT',
@@ -1339,6 +1339,18 @@ export default function DataDeletionSettingsPage() {
                                                                 >
                                                                     {activeState.deletingId === item.id ? 'Restoring...' : 'Restore'}
                                                                 </button>
+                                                                {activeResource === 'payroll' && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => void handleDeleteOne(activeResource, item, 'delete')}
+                                                                        disabled={activeState.deletingId === item.id || deletingAll}
+                                                                        title="Permanently delete this payroll record"
+                                                                        aria-label={`Permanently delete ${item.title}`}
+                                                                        style={{ padding: '6px 14px', border: 'none', borderRadius: 8, background: '#dc2626', color: 'white', cursor: activeState.deletingId === item.id || deletingAll ? 'default' : 'pointer', opacity: activeState.deletingId === item.id || deletingAll ? 0.6 : 1, fontWeight: 700, fontSize: 12, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                    >
+                                                                        {activeState.deletingId === item.id ? 'Working...' : 'Delete'}
+                                                                    </button>
+                                                                )}
                                                             </div>
                                                         ) : (
                                                             <button

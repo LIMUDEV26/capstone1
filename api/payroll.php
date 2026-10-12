@@ -18,6 +18,9 @@ $action = strtolower(trim((string)($_GET['action'] ?? '')));
 
 switch ($method) {
     case 'GET':
+        if (intval($_GET['storage_deleted'] ?? 0) === 1) {
+            requireRole(['admin']);
+        }
         requireAnyFeatureAccess(['payroll', 'my_payslips'], ['admin', 'manager', 'staff'], $conn);
         handleGet($conn);
         break;
@@ -539,6 +542,7 @@ function handleGet($conn) {
     }
     $releasedOnly = intval($_GET['released_only'] ?? 0) === 1;
     $include_archived = intval($_GET['include_archived'] ?? 0) === 1;
+    $storageDeletedOnly = intval($_GET['storage_deleted'] ?? 0) === 1;
     $restrictToReleased = $releasedOnly || $role === 'staff' || $useMyPayslipScope;
     $releasedStatusesSql = ($restrictToReleased && $include_archived)
         ? "('approved', 'paid', 'archived')"
@@ -600,6 +604,10 @@ function handleGet($conn) {
                 )" . $cashAdvanceJoinSql . $personalArchiveJoinSql . "
                 WHERE p.id = ?";
 
+        $sql .= $storageDeletedOnly
+            ? " AND p.storage_deleted_at IS NOT NULL AND p.status = 'archived'"
+            : " AND p.storage_deleted_at IS NULL";
+
         if ($restrictToReleased) {
             $sql .= " AND p.status IN $releasedStatusesSql";
         }
@@ -658,6 +666,10 @@ function handleGet($conn) {
                       AND ar2.pay_period_end = p.pay_period_end
                 )" . $cashAdvanceJoinSql . $personalArchiveJoinSql . "
                 WHERE 1=1";
+
+        $sql .= $storageDeletedOnly
+            ? " AND p.storage_deleted_at IS NOT NULL AND p.status = 'archived'"
+            : " AND p.storage_deleted_at IS NULL";
         
         $params = [];
         $types = '';
@@ -1053,9 +1065,9 @@ function handlePut($conn) {
     }
 
     if ($isArchiveTransition || $isRestoreTransition || $isMarkPaidTransition || $isRevertPaidTransition) {
-        $statusStmt = $conn->prepare("UPDATE payroll SET status = ?, archived_at = CASE WHEN ? = 'archived' THEN NOW() WHEN ? = 'paid' AND status = 'archived' THEN NULL ELSE archived_at END WHERE id = ?");
+        $statusStmt = $conn->prepare("UPDATE payroll SET status = ?, archived_at = CASE WHEN ? = 'archived' THEN NOW() WHEN ? = 'paid' AND status = 'archived' THEN NULL ELSE archived_at END, storage_deleted_at = CASE WHEN ? = 'paid' THEN NULL ELSE storage_deleted_at END WHERE id = ?");
         if (!$statusStmt) sendError('Failed to prepare payroll archive update.', 500);
-        $statusStmt->bind_param('sssi', $requestedStatus, $requestedStatus, $requestedStatus, $payroll_id);
+        $statusStmt->bind_param('ssssi', $requestedStatus, $requestedStatus, $requestedStatus, $requestedStatus, $payroll_id);
         if (!$statusStmt->execute()) {
             error_log($conn->error);
             sendError('Failed to update payroll archive status.', 500);
@@ -1533,6 +1545,31 @@ function handleDelete($conn) {
     $check_stmt->close();
     if ($record['status'] !== 'draft' && $record['status'] !== 'archived') {
         sendError('Only draft or archived payroll records can be deleted', 400);
+    }
+
+    $permanent = intval($_GET['permanent'] ?? 0) === 1;
+    if ($record['status'] === 'archived' && !$permanent) {
+        if (!empty($record['storage_deleted_at'])) {
+            sendResponse(true, null, 'Payroll record is already in Data Storage.');
+        }
+        $trash = $conn->prepare("UPDATE payroll SET storage_deleted_at = NOW() WHERE id = ? AND status = 'archived' AND storage_deleted_at IS NULL");
+        if (!$trash) sendError('Failed to prepare payroll archive move.', 500);
+        $trash->bind_param('i', $payroll_id);
+        if (!$trash->execute()) {
+            error_log($conn->error);
+            sendError('Failed to move payroll record to Data Storage.', 500);
+        }
+        $trash->close();
+        if ($user_id = checkAuthentication()) {
+            releaseSessionLock();
+            logActivity($conn, $user_id, 'trash_payroll', "Moved archived payroll ID: $payroll_id to Data Storage", 'payroll_management');
+            logAuditTrail($conn, $user_id, 'payroll', $payroll_id, 'trash', $record, array_merge($record, ['storage_deleted_at' => date('Y-m-d H:i:s')]), basename(__FILE__));
+        }
+        sendResponse(true, null, 'Payroll record moved to Data Storage.');
+    }
+
+    if ($record['status'] === 'archived' && empty($record['storage_deleted_at'])) {
+        sendError('Move the payroll record to Data Storage before permanently deleting it.', 409);
     }
     
     $sql = "DELETE FROM payroll WHERE id = ?";
