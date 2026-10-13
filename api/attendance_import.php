@@ -934,7 +934,7 @@ function saveAttendanceSourceMapping($conn, $sourceSystem, $externalCode, $exter
 function storeAttendanceReviewItem($conn, $batchId, $rowNumber, $sourceSystem, $fileName, $payPeriodStart, $payPeriodEnd, $code, $name, $role, $branch, $daysWorked, $overtimeHours, $lateMinutes, $absentDays, $leaveDays, $errorMessage) {
     $stmt = $conn->prepare(
         "INSERT INTO attendance_import_review_items
-            (batch_id, row_number, source_system, original_filename, pay_period_start, pay_period_end,
+            (batch_id, `row_number`, source_system, original_filename, pay_period_start, pay_period_end,
              external_employee_code, external_employee_name, external_role, external_branch,
              days_worked, overtime_hours, late_minutes, absent_days, leave_days, status, error_message, uploaded_by)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_review', ?, ?)"
@@ -963,7 +963,7 @@ function handleGetReviewBatch($conn) {
         "SELECT i.*, CONCAT(e.first_name, ' ', e.last_name) AS matched_employee_name
          FROM attendance_import_review_items i
          LEFT JOIN employees e ON e.employee_id = i.matched_employee_id
-         WHERE i.batch_id = ? ORDER BY i.row_number ASC, i.item_id ASC"
+         WHERE i.batch_id = ? ORDER BY i.`row_number` ASC, i.item_id ASC"
     );
     if (!$stmt) sendError('Failed to load attendance review rows.', 500);
     $stmt->bind_param('s', $batchId);

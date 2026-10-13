@@ -547,7 +547,7 @@ function ensurePhaseOneTables($conn) {
         "CREATE TABLE IF NOT EXISTS attendance_import_review_items (
             item_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             batch_id VARCHAR(50) NOT NULL,
-            row_number INT NOT NULL,
+            `row_number` INT NOT NULL,
             source_system VARCHAR(60) NOT NULL,
             original_filename VARCHAR(255) NOT NULL DEFAULT '',
             pay_period_start DATE NOT NULL,
@@ -569,7 +569,7 @@ function ensurePhaseOneTables($conn) {
             reviewed_by INT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             reviewed_at TIMESTAMP NULL DEFAULT NULL,
-            UNIQUE KEY uq_attendance_review_batch_row (batch_id, row_number),
+            UNIQUE KEY uq_attendance_review_batch_row (batch_id, `row_number`),
             INDEX idx_attendance_review_batch_status (batch_id, status),
             CONSTRAINT fk_attendance_review_employee FOREIGN KEY (matched_employee_id) REFERENCES employees(employee_id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
