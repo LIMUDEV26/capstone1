@@ -18,6 +18,18 @@ function attendanceNormalizeSourceEmployeeCode($value) {
     return is_string($normalized) ? $normalized : '';
 }
 
+function attendanceMappedEmployeeNameConflicts($employee, $externalEmployeeName) {
+    $externalNameKey = attendanceNormalizeIdentityKey($externalEmployeeName);
+    if ($externalNameKey === '') return false;
+
+    $registeredName = trim((string)($employee['name'] ?? ''));
+    if ($registeredName === '') {
+        $registeredName = trim((string)($employee['first_name'] ?? '') . ' ' . (string)($employee['last_name'] ?? ''));
+    }
+    $registeredNameKey = attendanceNormalizeIdentityKey($registeredName);
+    return $registeredNameKey === '' || $registeredNameKey !== $externalNameKey;
+}
+
 function attendanceBuildResolvedEmployeeMatch($employee, $method, $label, $confidence, $signals) {
     $signals = array_values(array_filter(array_map(
         static fn($signal) => trim((string)$signal),
@@ -94,8 +106,10 @@ function attendanceResolveImportedEmployee($employeeDirectory, $externalMappings
                 return ['ok' => false, 'message' => 'The saved source-ID mapping points to an employee who is no longer active. Review this row before importing.'];
             }
             $employee = $employeeDirectory['by_id'][$employeeId];
-            if (($localMatches[0]['match_method'] ?? '') !== 'manual_review'
-                && count($nameMatches) === 1 && intval($nameMatches[0]['employee_id']) !== $employeeId) {
+            if (attendanceMappedEmployeeNameConflicts($employee, $externalEmployeeName)) {
+                return ['ok' => false, 'message' => 'The saved source-ID mapping points to a different employee than the uploaded name. Review this row before importing.'];
+            }
+            if (count($nameMatches) === 1 && intval($nameMatches[0]['employee_id']) !== $employeeId) {
                 return ['ok' => false, 'message' => 'The saved source-ID mapping and uploaded name point to different employees. Review this row before importing.'];
             }
             return attendanceBuildResolvedEmployeeMatch($employee, 'source_id_mapping', 'Saved source ID matched', 1.0, [
@@ -119,6 +133,9 @@ function attendanceResolveImportedEmployee($employeeDirectory, $externalMappings
     }
     $externalMatch = $externalCodeMatch ?: $externalNameMatch;
     if ($externalMatch) {
+        if (attendanceMappedEmployeeNameConflicts($externalMatch['employee'], $externalEmployeeName)) {
+            return ['ok' => false, 'message' => 'The confirmed source mapping points to a different employee than the uploaded name. Review this row before importing.'];
+        }
         if (count($nameMatches) === 1 && intval($nameMatches[0]['employee_id']) !== intval($externalMatch['employee']['employee_id'])) {
             return ['ok' => false, 'message' => 'The confirmed source mapping conflicts with the registered employee name. Review this row before importing.'];
         }

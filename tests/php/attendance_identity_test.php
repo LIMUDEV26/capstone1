@@ -39,6 +39,20 @@ expectMatch(!empty($laterImport['ok']), 'A saved source-ID mapping should resolv
 expectMatch(intval($laterImport['employee']['employee_id'] ?? 0) === 9071, 'The saved mapping must point to Marie\'s original account.');
 expectMatch(($laterImport['method'] ?? '') === 'source_id_mapping', 'Later imports should use the saved source-ID mapping.');
 
+// Even a saved source-ID mapping must not import a row whose supplied name
+// belongs to nobody in the registered employee directory.
+$unknownName = attendanceResolveImportedEmployee($directory, $externalMappings, $savedMappings, '34', 'MGE');
+expectMatch(empty($unknownName['ok']), 'A mapped source ID with an unknown employee name must go to review.');
+
+// An external source mapping is also insufficient when the file explicitly
+// names a different employee.
+$externalCodeMappings = ['by_code' => ['34' => [[
+    'employee_id' => 9071,
+    'confidence_score' => 1,
+]]], 'by_name' => []];
+$unknownExternalName = attendanceResolveImportedEmployee($directory, $externalCodeMappings, [], '34', 'MGE');
+expectMatch(empty($unknownExternalName['ok']), 'An external ID mapping must not override an unknown uploaded name.');
+
 // Ambiguous names must be reviewed, not guessed.
 $otherMarie = ['employee_id' => 9072, 'name' => 'Marie M.E.', 'employee_date_id' => '9'];
 $ambiguousDirectory = $directory;
