@@ -8,6 +8,7 @@ let lastWarmAt = 0;
 const ROUTE_WARMUP_COOLDOWN_MS = 120;
 const ROUTE_DATA_WARM_TTL_MS = 45_000;
 const MAX_BATCH_PREFETCHES = 32;
+const IS_STATIC_EXPORT = process.env.NEXT_PUBLIC_STATIC_EXPORT === '1';
 
 function canWarmRoute(routePath: string) {
     if (!routePath || WARMED_ROUTES.has(routePath)) return false;
@@ -17,6 +18,10 @@ function canWarmRoute(routePath: string) {
 }
 
 export function warmRoute(router: Pick<NextRouter, 'prefetch'>, routePath: string) {
+    // Apache serves the Railway static export. Pages without getStaticProps do
+    // not have /_next/data JSON files in that export, so Next's route prefetch
+    // returns 404 and may try to hard-navigate to the page we're already on.
+    if (IS_STATIC_EXPORT) return;
     if (!canWarmRoute(routePath)) return;
 
     router.prefetch(routePath).catch(() => {});
@@ -111,6 +116,7 @@ export function warmRouteData(routePath: string) {
 }
 
 export function warmRoutes(router: Pick<NextRouter, 'prefetch'>, routePaths: string[]) {
+    if (IS_STATIC_EXPORT) return;
     const now = Date.now();
     if (now - lastWarmAt < ROUTE_WARMUP_COOLDOWN_MS) return;
     lastWarmAt = now;

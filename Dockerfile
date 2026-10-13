@@ -7,6 +7,7 @@ RUN npm ci
 
 COPY . .
 ENV DEPLOY_STATIC=1
+ENV NEXT_PUBLIC_STATIC_EXPORT=1
 RUN npm run build
 
 FROM php:8.2-apache
