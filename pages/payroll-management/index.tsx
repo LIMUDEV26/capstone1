@@ -113,6 +113,8 @@ type Employee = {
     last_name: string;
     salary: number;
     status: string;
+    branch_id?: number | string | null;
+    storage_deleted_at?: string | null;
 };
 
 type BranchOption = {
@@ -575,9 +577,17 @@ export default function PayrollManagement() {
 
     const fetchEmployees = async () => {
         try {
-            const res = await fetch(`${API}/employees.php`, OPTS);
+            const res = await fetch(`${API}/employees.php?status=active`, OPTS);
             const d = await res.json();
-            if (d.success) setEmployees(d.data.filter((e: Employee) => e.status === 'active'));
+            if (d.success) {
+                const activeEmployees = Array.isArray(d.data)
+                    ? d.data.filter((employee: Employee) =>
+                        String(employee.status || '').toLowerCase() === 'active'
+                        && !employee.storage_deleted_at
+                    )
+                    : [];
+                setEmployees(activeEmployees);
+            }
         } catch { console.error('Failed to fetch employees'); }
     };
 
@@ -1581,6 +1591,9 @@ export default function PayrollManagement() {
     // each section shows its own inline loading state while data resolves.
 
     const kpi = analytics?.kpi;
+    const activeHeadcount = employees.filter((employee) =>
+        analyticsBranchId === 'all' || String(employee.branch_id ?? '') === analyticsBranchId
+    ).length;
     const viewBusy = viewRecord ? isIdBusy(viewRecord.id) : false;
     const canManage = user?.role !== 'staff';
     const analyticsBranchLabel = analyticsBranchId === 'all'
@@ -1638,7 +1651,7 @@ export default function PayrollManagement() {
                     </div>
                     <div>
                         <div className={s.kpiLabel}>Active Headcount</div>
-                        <div className={s.kpiValue}>{kpi?.headcount || 0}</div>
+                        <div className={s.kpiValue}>{activeHeadcount}</div>
                     </div>
                 </div>
                 <div className={s.kpiCard}>
