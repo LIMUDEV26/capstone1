@@ -369,19 +369,29 @@ export default function DeductionTypesSettingsPage() {
             if (data.success && data.data) {
                 const staffRate = data.data.company_daily_rate ?? '';
                 const managerRate = '';
+                const companyRate = staffRate === null || staffRate === undefined ? '' : String(staffRate);
                 setHourlyRates({
-                    staff: staffRate === null || staffRate === undefined ? '' : String(staffRate),
+                    staff: companyRate,
                     manager: managerRate === null || managerRate === undefined ? '' : String(managerRate),
                 });
-                setDailyRateInput(staffRate === null || staffRate === undefined ? '' : String(staffRate));
                 let rateMap: Record<string, unknown> = {};
                 try {
                     const parsed = JSON.parse(String(data.data.company_daily_rate_by_branch || '{}'));
                     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) rateMap = parsed;
                 } catch { /* Invalid old setting falls back to the company default. */ }
-                setDailyRateByBranch(Object.fromEntries(
+                const nextBranchRates = Object.fromEntries(
                     Object.entries(rateMap).map(([id, rate]) => [id, String(rate ?? '')])
-                ));
+                );
+                setDailyRateByBranch(nextBranchRates);
+                // Keep the selected branches' saved value visible after saving. Previously
+                // this always reset the input to the company default, making a saved 500
+                // branch rate look like it had changed back to 600.
+                const selectedRates = selectedRateBranches.map((id) => nextBranchRates[id] ?? '');
+                const selectedRate = selectedRateBranches.length > 0
+                    && selectedRates.every((rate) => rate !== '' && rate === selectedRates[0])
+                    ? selectedRates[0]
+                    : selectedRateBranches.length > 0 ? '' : companyRate;
+                setDailyRateInput(selectedRate);
             }
             if (branchData.success && Array.isArray(branchData.data)) {
                 setDailyRateBranches(branchData.data.map((row: Record<string, unknown>) => ({
