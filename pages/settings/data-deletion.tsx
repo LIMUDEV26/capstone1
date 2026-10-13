@@ -473,8 +473,7 @@ export default function DataDeletionSettingsPage() {
                         };
                     });
                 },
-                deleteOne: (id: number) =>
-                    requestJson(`${API_BASE}/payroll.php?id=${id}&permanent=1`, { method: 'DELETE' }),
+                deleteOne: async () => ({ success: false, message: 'Manual permanent deletion is disabled. Archived payroll records are removed automatically after five years in Data Storage.' }),
                 restoreOne: (id: number) =>
                     requestJson(`${API_BASE}/payroll.php`, {
                         method: 'PUT',
@@ -865,9 +864,7 @@ export default function DataDeletionSettingsPage() {
                     : key === 'payroll'
                         ? `${item.title} will return to active payroll records with Paid status.`
                         : `${item.title} will return to Archived Employees.`
-                : key === 'payroll'
-                    ? `Archived payroll for ${item.title} will be permanently removed from Data Storage and cannot be restored. The employee account will remain.`
-                    : `${item.title} will be deleted permanently. This cannot be undone.`,
+                : `${item.title} will be deleted permanently. This cannot be undone.`,
             confirmButtonText: isRestore ? 'Restore' : 'Delete Permanently',
             icon: 'warning',
             danger: true,
@@ -1381,18 +1378,6 @@ export default function DataDeletionSettingsPage() {
                                                                 >
                                                                     {activeState.deletingId === item.id ? 'Restoring...' : 'Restore'}
                                                                 </button>
-                                                                {activeResource === 'payroll' && item.isArchived && (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => void handleDeleteOne(activeResource, item, 'delete')}
-                                                                        disabled={activeState.deletingId === item.id || deletingAll}
-                                                                        title="Permanently delete this archived payroll record"
-                                                                        aria-label={`Permanently delete payroll for ${item.title}`}
-                                                                        style={{ padding: '6px 14px', border: 'none', borderRadius: 8, background: '#dc2626', color: 'white', cursor: activeState.deletingId === item.id || deletingAll ? 'default' : 'pointer', opacity: activeState.deletingId === item.id || deletingAll ? 0.6 : 1, fontWeight: 700, fontSize: 12, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                                                                    >
-                                                                        {activeState.deletingId === item.id ? 'Deleting...' : 'Delete'}
-                                                                    </button>
-                                                                )}
                                                             </div>
                                                         ) : (
                                                             <button
