@@ -16,20 +16,26 @@ ensurePayrollAnalyticsSchema($conn);
 
 function ensurePayrollAnalyticsSchema($conn) {
     $dbName = DB_NAME;
-    $checkSql = "SELECT 1
-                 FROM information_schema.COLUMNS
-                 WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'employees' AND COLUMN_NAME = 'employment_type'
-                 LIMIT 1";
-    $checkStmt = $conn->prepare($checkSql);
-    if (!$checkStmt) return;
+    $requiredColumns = [
+        'employment_type' => "ALTER TABLE employees ADD COLUMN `employment_type` VARCHAR(50) NOT NULL DEFAULT 'Full-Time'",
+        'storage_deleted_at' => 'ALTER TABLE employees ADD COLUMN `storage_deleted_at` DATETIME NULL',
+    ];
+    foreach ($requiredColumns as $column => $alterSql) {
+        $checkSql = "SELECT 1
+                     FROM information_schema.COLUMNS
+                     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'employees' AND COLUMN_NAME = ?
+                     LIMIT 1";
+        $checkStmt = $conn->prepare($checkSql);
+        if (!$checkStmt) return;
+        $checkStmt->bind_param('ss', $dbName, $column);
+        $checkStmt->execute();
+        $exists = $checkStmt->get_result()->num_rows > 0;
+        $checkStmt->close();
 
-    $checkStmt->bind_param('s', $dbName);
-    $checkStmt->execute();
-    $exists = $checkStmt->get_result()->num_rows > 0;
-    $checkStmt->close();
-
-    if (!$exists) {
-        $conn->query("ALTER TABLE employees ADD COLUMN `employment_type` VARCHAR(50) NOT NULL DEFAULT 'Full-Time'");
+        if (!$exists && !$conn->query($alterSql)) {
+            error_log('Failed to prepare payroll analytics employee schema: ' . $conn->error);
+            return;
+        }
     }
 }
 
@@ -38,7 +44,7 @@ function buildPayrollAnalyticsFilter($tableAlias, $periodStart, $periodEnd, $bra
     // Active dashboard totals exclude archived payslips and inactive employees.
     $conditions = [
         "({$prefix}status IS NULL OR {$prefix}status IN ('approved', 'paid'))",
-        "EXISTS (SELECT 1 FROM employees active_employee WHERE active_employee.employee_id = {$prefix}employee_id AND active_employee.status = 'active')",
+        "EXISTS (SELECT 1 FROM employees active_employee WHERE active_employee.employee_id = {$prefix}employee_id AND active_employee.status = 'active' AND active_employee.storage_deleted_at IS NULL)",
         "NOT EXISTS (SELECT 1 FROM users archived_user WHERE archived_user.employee_id = {$prefix}employee_id AND archived_user.status = 'inactive')",
     ];
     $params = [];
@@ -127,6 +133,7 @@ if ($method === 'GET') {
     // Headcount (Active employees)
     $headcount_sql = "SELECT COUNT(*) as count FROM employees e
                       WHERE e.status = 'active'
+                        AND e.storage_deleted_at IS NULL
                         AND NOT EXISTS (
                             SELECT 1 FROM users u
                             WHERE u.employee_id = e.employee_id AND u.status = 'inactive'
