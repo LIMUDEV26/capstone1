@@ -36,8 +36,9 @@ function resolveEmailBrandLogoPath() {
         $candidates[] = $projectRoot . DIRECTORY_SEPARATOR . ltrim($normalized, DIRECTORY_SEPARATOR);
     }
 
-    // Prefer the compact logo asset for inline email embedding. The full-size
-    // logo.png is several megabytes and may not be copied into production.
+    // Email clients have uneven WebP support. Use the small PNG export for
+    // inline embedding; the full-size logo.png is several megabytes.
+    $candidates[] = $projectRoot . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'logo-email.png';
     $candidates[] = $projectRoot . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'logo-ui.webp';
     $candidates[] = $projectRoot . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'logo.png';
     $candidates[] = $projectRoot . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'logo_v2.png';
@@ -67,14 +68,14 @@ function getEmailBranding() {
     if ($logoUrl === '') {
         $frontendBase = trim((string)(getenv('FRONTEND_BASE_URL') ?: ''));
         if ($frontendBase !== '') {
-            $logoUrl = rtrim($frontendBase, '/') . '/logo.png';
+            $logoUrl = rtrim($frontendBase, '/') . '/logo-email.png';
         } else {
             $isHttps = !empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off';
             $scheme = $isHttps ? 'https' : 'http';
             $host = trim((string)($_SERVER['HTTP_HOST'] ?? ''));
             if ($host !== '') {
                 // Railway serves the Next.js public directory from the site root.
-                $logoUrl = $scheme . '://' . $host . '/logo.png';
+                $logoUrl = $scheme . '://' . $host . '/logo-email.png';
             }
         }
     }
@@ -108,8 +109,8 @@ function buildBrandedEmailLayout($contentHtml, $preheader = '') {
 
     $logoBlock = '';
     if ($logoSrc !== '') {
-        $logoBlock = '<img src="' . htmlspecialchars($logoSrc, ENT_QUOTES, 'UTF-8') . '" alt="' . $safeBrandName . ' Logo" width="64" height="64" '
-            . 'style="display:block;width:64px;height:64px;border:0;outline:none;text-decoration:none;margin:0 auto 10px auto;">';
+        $logoBlock = '<img src="' . htmlspecialchars($logoSrc, ENT_QUOTES, 'UTF-8') . '" alt="' . $safeBrandName . ' Logo" width="64" height="52" '
+            . 'style="display:block;width:64px;height:52px;border:0;outline:none;text-decoration:none;margin:0 auto 10px auto;">';
     }
 
     $supportLine = '';
