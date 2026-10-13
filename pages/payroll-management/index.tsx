@@ -115,6 +115,8 @@ type Employee = {
     status: string;
     branch_id?: number | string | null;
     storage_deleted_at?: string | null;
+    linked_user_id?: number | string | null;
+    linked_user_status?: string | null;
 };
 
 type BranchOption = {
@@ -1592,7 +1594,9 @@ export default function PayrollManagement() {
 
     const kpi = analytics?.kpi;
     const activeHeadcount = employees.filter((employee) =>
-        analyticsBranchId === 'all' || String(employee.branch_id ?? '') === analyticsBranchId
+        Number(employee.linked_user_id) > 0
+        && String(employee.linked_user_status || '').toLowerCase() === 'active'
+        && (analyticsBranchId === 'all' || String(employee.branch_id ?? '') === analyticsBranchId)
     ).length;
     const viewBusy = viewRecord ? isIdBusy(viewRecord.id) : false;
     const canManage = user?.role !== 'staff';
