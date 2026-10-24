@@ -4,6 +4,8 @@ import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 
+const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://llb-accountant.vercel.app').replace(/\/$/, '');
+
 export default function Landing() {
   const router = useRouter();
   const assetBasePath = router.basePath || '';
@@ -123,17 +125,17 @@ export default function Landing() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="description" content="Lope Laranjo Bato & Co., CPAs provides professional accounting, assurance, and advisory services with trusted expertise and lasting value." />
         <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
-        <link rel="canonical" href="https://llb-accountant.vercel.app/landing" />
+        <link rel="canonical" href={`${siteUrl}/landing`} />
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content="Lope Laranjo Bato & Co., CPAs" />
         <meta property="og:title" content="Lope Laranjo Bato & Co., CPAs — Trusted Expertise. Lasting Value." />
         <meta property="og:description" content="Professional accounting, assurance, and advisory services." />
-        <meta property="og:url" content="https://llb-accountant.vercel.app/landing" />
-        <meta property="og:image" content="https://llb-accountant.vercel.app/logo.png" />
+        <meta property="og:url" content={`${siteUrl}/landing`} />
+        <meta property="og:image" content={`${siteUrl}/logo.png`} />
         <meta name="twitter:card" content="summary" />
         <meta name="twitter:title" content="Lope Laranjo Bato & Co., CPAs" />
         <meta name="twitter:description" content="Professional accounting, assurance, and advisory services." />
-        <meta name="twitter:image" content="https://llb-accountant.vercel.app/logo.png" />
+        <meta name="twitter:image" content={`${siteUrl}/logo.png`} />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -142,8 +144,8 @@ export default function Landing() {
               '@type': 'Organization',
               name: 'Lope Laranjo Bato & Co., CPAs',
               alternateName: 'LLB & Co., CPAs',
-              url: 'https://llb-accountant.vercel.app/landing',
-              logo: 'https://llb-accountant.vercel.app/logo.png',
+              url: `${siteUrl}/landing`,
+              logo: `${siteUrl}/logo.png`,
               description: 'Professional accounting, assurance, and advisory services.',
             }),
           }}
@@ -206,7 +208,7 @@ export default function Landing() {
             Services
           </a>
           <Link
-            href="https://curled-bluish-multitask.ngrok-free.dev/"
+            href="/"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -401,7 +403,7 @@ export default function Landing() {
 
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
               <Link
-                href="https://curled-bluish-multitask.ngrok-free.dev/"
+                href="/"
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -751,7 +753,7 @@ export default function Landing() {
                 The same blue you see at log in — now as a full 3D workspace. Glass cards, orange accents, and real-time analytics that feel alive.
               </div>
               <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
-                <Link href="https://curled-bluish-multitask.ngrok-free.dev/" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 10, background: '#fff', color: '#0f2a4a', fontWeight: 900, fontSize: 12, textDecoration: 'none', border: '1px solid rgba(240,160,58,0.18)' }}>
+                <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 10, background: '#fff', color: '#0f2a4a', fontWeight: 900, fontSize: 12, textDecoration: 'none', border: '1px solid rgba(240,160,58,0.18)' }}>
                   Go to Log In →
                 </Link>
                 <span style={{ display: 'inline-flex', alignItems: 'center', padding: '10px 12px', borderRadius: 10, background: 'rgba(240,160,58,0.14)', border: '1px solid rgba(240,160,58,0.28)', color: '#f0a03a', fontWeight: 800, fontSize: 11 }}>● System Live</span>
@@ -786,7 +788,7 @@ export default function Landing() {
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <span style={{ padding: '6px 10px', borderRadius: 999, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}>Accounting • Assurance • Advisory</span>
-            <Link href="https://curled-bluish-multitask.ngrok-free.dev/" style={{ padding: '8px 14px', borderRadius: 999, background: 'rgba(240,160,58,0.14)', border: '1px solid rgba(240,160,58,0.28)', color: '#f0a03a', fontWeight: 800, textDecoration: 'none', fontSize: 11 }}>
+            <Link href="/" style={{ padding: '8px 14px', borderRadius: 999, background: 'rgba(240,160,58,0.14)', border: '1px solid rgba(240,160,58,0.28)', color: '#f0a03a', fontWeight: 800, textDecoration: 'none', fontSize: 11 }}>
               Log In
             </Link>
           </div>

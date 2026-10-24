@@ -1171,18 +1171,16 @@ export default function Login() {
         <title>{loginTitleLines.join(' ')}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="description" content="Secure client and employee portal for Lope Laranjo Bato & Co., CPAs, providing access to accounting, assurance, and advisory services." />
-        <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
-        <link rel="canonical" href="https://llb-accountant.vercel.app/" />
+        <meta name="robots" content="noindex,nofollow" />
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content="Lope Laranjo Bato & Co., CPAs" />
         <meta property="og:title" content="Lope Laranjo Bato & Co., CPAs" />
         <meta property="og:description" content="Secure client and employee portal for accounting, assurance, and advisory services." />
-        <meta property="og:url" content="https://llb-accountant.vercel.app/" />
-        <meta property="og:image" content="https://llb-accountant.vercel.app/logo.png" />
+        <meta property="og:image" content="/logo.png" />
         <meta name="twitter:card" content="summary" />
         <meta name="twitter:title" content="Lope Laranjo Bato & Co., CPAs" />
         <meta name="twitter:description" content="Secure client and employee portal for accounting, assurance, and advisory services." />
-        <meta name="twitter:image" content="https://llb-accountant.vercel.app/logo.png" />
+        <meta name="twitter:image" content="/logo.png" />
         <style>{`
           html, body, #__next {
             height: 100%;

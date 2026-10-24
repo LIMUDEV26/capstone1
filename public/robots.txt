@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /landing
+Disallow: /
+
+Sitemap: https://llb-accountant.vercel.app/sitemap.xml

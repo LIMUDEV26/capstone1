@@ -27,6 +27,7 @@ Set these in the web service's Variables page. Use Railway variable references f
 | `DB_USER` | MySQL service `MYSQLUSER` |
 | `DB_PASS` | MySQL service `MYSQLPASSWORD` |
 | `FRONTEND_BASE_URL` | The web service's public HTTPS origin |
+| `NEXT_PUBLIC_SITE_URL` | The public website's HTTPS origin (currently `https://llb-accountant.vercel.app`; replace with the final custom domain when connected) |
 | `CORS_ALLOWED_ORIGINS` | The same exact HTTPS origin; do not use `*` |
 | `SMTP_HOST` | `smtp.gmail.com` (or the SMTP provider's host) |
 | `SMTP_PORT` | `587` |
@@ -48,5 +49,7 @@ Do not point a production deployment at the local XAMPP database: it is only rea
 ## 5. Verify before sharing
 
 After the first deploy, check the public HTTPS URL and test login/verification email, employee and branch management, payroll, archived record restore, and document upload/download. Confirm uploaded files remain after a redeploy, and set up regular database backups before using real payroll records.
+
+The public marketing page is `/landing`; the root page is the private login screen. Search metadata and `public/sitemap.xml` currently use `https://llb-accountant.vercel.app`. If you connect a custom domain, update `NEXT_PUBLIC_SITE_URL`, `public/sitemap.xml`, and the `Sitemap` line in `public/robots.txt` to that exact HTTPS origin, then redeploy. Add the verified site in Google Search Console and submit `/sitemap.xml` to request indexing. Search listing and ranking can take time and are controlled by the search engine.
 
 The existing `render.yaml` is not used for this Railway path. It contains old repository and placeholder values; do not deploy it as-is.
