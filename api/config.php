@@ -60,17 +60,33 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Database configuration
-// Use 127.0.0.1 instead of "localhost" to avoid slow IPv6/DNS resolution on
-// Windows, which can hang and cause ECONNREFUSED / socket hang up via the proxy.
-//
-// Local development uses the XAMPP default root account with no password.
-// See api/.htaccess if you want to override these via server environment.
-define('DB_HOST', getenv('DB_HOST') !== false ? getenv('DB_HOST') : '127.0.0.1');
-define('DB_USER', getenv('DB_USER') !== false ? getenv('DB_USER') : 'root');
-define('DB_PASS', getenv('DB_PASS') !== false ? getenv('DB_PASS') : '');
-define('DB_NAME', getenv('DB_NAME') !== false ? getenv('DB_NAME') : 'llb');
-define('DB_PORT', getenv('DB_PORT') !== false ? (int)getenv('DB_PORT') : 3306);
+// Database configuration.
+// Railway's MySQL service exposes MYSQLHOST/MYSQLPORT/MYSQLDATABASE/MYSQLUSER/
+// MYSQLPASSWORD. Prefer the app's DB_* names, but accept Railway's native names
+// as a fallback so deployment works even when DB_* references are omitted.
+// Also recover if a DB_* value was entered as the literal variable label
+// (for example "MYSQLHOST") instead of being inserted as a Railway reference.
+function llbDatabaseEnv(string $appName, string $railwayName, string $default): string {
+    $value = getenv($appName);
+    $value = $value === false ? '' : trim((string)$value);
+
+    if ($value === '' || strtoupper($value) === $railwayName) {
+        $railwayValue = getenv($railwayName);
+        if ($railwayValue !== false && trim((string)$railwayValue) !== '') {
+            return trim((string)$railwayValue);
+        }
+    }
+
+    return $value !== '' ? $value : $default;
+}
+
+// Use 127.0.0.1 instead of "localhost" for local XAMPP development to avoid
+// slow IPv6/DNS resolution on Windows.
+define('DB_HOST', llbDatabaseEnv('DB_HOST', 'MYSQLHOST', '127.0.0.1'));
+define('DB_USER', llbDatabaseEnv('DB_USER', 'MYSQLUSER', 'root'));
+define('DB_PASS', llbDatabaseEnv('DB_PASS', 'MYSQLPASSWORD', ''));
+define('DB_NAME', llbDatabaseEnv('DB_NAME', 'MYSQLDATABASE', 'llb'));
+define('DB_PORT', (int)llbDatabaseEnv('DB_PORT', 'MYSQLPORT', '3306'));
 
 // Timezone configuration
 date_default_timezone_set('Asia/Manila');
@@ -122,6 +138,9 @@ function getDBConnection() {
             );
         }
     } catch (Throwable $e) {
+        // Keep connection details in Railway/server logs only; never return
+        // driver errors (which may contain infrastructure details) to clients.
+        error_log('Database connection exception [' . $e->getCode() . ']: ' . $e->getMessage());
         http_response_code(500);
         die(json_encode([
             'success' => false,
@@ -130,10 +149,11 @@ function getDBConnection() {
     }
     
     if ($conn->connect_error) {
+        error_log('Database connection failed [' . $conn->connect_errno . ']: ' . $conn->connect_error);
         http_response_code(500);
         die(json_encode([
             'success' => false,
-            'message' => 'Database connection failed: ' . $conn->connect_error
+            'message' => 'Database connection failed. Check the configured database credentials.'
         ]));
     }
     
