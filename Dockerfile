@@ -10,6 +10,12 @@ ENV DEPLOY_STATIC=1
 ENV NEXT_PUBLIC_STATIC_EXPORT=1
 RUN npm run build
 
+FROM composer:2 AS php-dependencies
+
+WORKDIR /app
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader
+
 FROM php:8.2-apache
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -18,10 +24,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libjpeg62-turbo-dev \
       libfreetype6-dev \
       libonig-dev \
+      libcurl4-openssl-dev \
       python3 \
       python3-xlrd \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j"$(nproc)" mysqli pdo_mysql mbstring fileinfo zip gd opcache \
+    && docker-php-ext-install -j"$(nproc)" mysqli pdo_mysql curl mbstring fileinfo zip gd opcache \
     && rm -f /etc/apache2/mods-enabled/mpm_*.load /etc/apache2/mods-enabled/mpm_*.conf \
     && ln -s /etc/apache2/mods-available/mpm_prefork.load /etc/apache2/mods-enabled/mpm_prefork.load \
     && ln -s /etc/apache2/mods-available/mpm_prefork.conf /etc/apache2/mods-enabled/mpm_prefork.conf \
@@ -33,10 +40,10 @@ WORKDIR /var/www/html
 COPY --from=frontend-build /app/out/ ./out/
 COPY .htaccess ./.htaccess
 COPY api/ ./capstone1/api/
+COPY --from=php-dependencies /app/vendor/ ./capstone1/vendor/
 COPY public/logo-ui.webp ./capstone1/public/logo-ui.webp
 COPY public/logo-email.png ./capstone1/public/logo-email.png
 COPY scripts/convert_xls_to_csv.py ./capstone1/scripts/convert_xls_to_csv.py
-COPY vendor/ ./capstone1/vendor/
 COPY docker/api.htaccess.prod ./capstone1/api/.htaccess
 COPY docker/uploads.htaccess.prod /usr/local/share/llb/uploads.htaccess
 COPY docker/000-default.conf /etc/apache2/sites-available/000-default.conf

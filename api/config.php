@@ -5,6 +5,79 @@
  * This file contains database connection settings and helper functions
  */
 
+// Keep PHP diagnostics in the Railway container logs, never in API responses.
+// The production .htaccess also suppresses display_errors, so repeat the
+// setting here after PHP has loaded that per-directory configuration.
+ini_set('display_errors', '0');
+ini_set('display_startup_errors', '0');
+ini_set('log_errors', '1');
+error_reporting(E_ALL);
+if (DIRECTORY_SEPARATOR === '/' && is_writable('/dev/stderr')) {
+    ini_set('error_log', '/dev/stderr');
+}
+
+if (!isset($GLOBALS['LLB_API_REQUEST_ID'])) {
+    try {
+        $GLOBALS['LLB_API_REQUEST_ID'] = bin2hex(random_bytes(8));
+    } catch (Throwable $e) {
+        $GLOBALS['LLB_API_REQUEST_ID'] = uniqid('llb-', true);
+    }
+}
+
+// PHP 8 turns many mysqli failures into uncaught exceptions. Without this
+// handler Apache returns an HTML 500 page, which the frontend misreports as a
+// network/JSON error. Keep details in stderr and give API callers valid JSON.
+set_exception_handler(static function (Throwable $e): void {
+    $requestId = (string)($GLOBALS['LLB_API_REQUEST_ID'] ?? 'unknown');
+    error_log(sprintf(
+        '[request:%s] Uncaught %s (%s): %s in %s:%d%s',
+        $requestId,
+        get_class($e),
+        (string)$e->getCode(),
+        $e->getMessage(),
+        $e->getFile(),
+        $e->getLine(),
+        PHP_EOL . $e->getTraceAsString()
+    ));
+
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: application/json; charset=UTF-8');
+        header('Cache-Control: no-store');
+    }
+    echo json_encode([
+        'success' => false,
+        'message' => 'The server could not complete this request. Please try again.',
+        'request_id' => $requestId,
+    ], JSON_UNESCAPED_SLASHES);
+});
+
+register_shutdown_function(static function (): void {
+    $last = error_get_last();
+    if (!$last || !in_array($last['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR], true)) {
+        return;
+    }
+
+    $requestId = (string)($GLOBALS['LLB_API_REQUEST_ID'] ?? 'unknown');
+    error_log(sprintf(
+        '[request:%s] Fatal PHP error: %s in %s:%d',
+        $requestId,
+        (string)$last['message'],
+        (string)$last['file'],
+        (int)$last['line']
+    ));
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: application/json; charset=UTF-8');
+        header('Cache-Control: no-store');
+        echo json_encode([
+            'success' => false,
+            'message' => 'The server could not complete this request. Please try again.',
+            'request_id' => $requestId,
+        ], JSON_UNESCAPED_SLASHES);
+    }
+});
+
 // ── Server-local secrets (Phase 0) ───────────────────────────────────────────
 // SMTP credentials used to be hardcoded in the tracked api/.htaccess, which
 // committed a live Gmail app password to git history. They now load from
@@ -43,16 +116,21 @@ if (session_status() === PHP_SESSION_NONE) {
     @ini_set('session.use_only_cookies', '1');
     @ini_set('session.use_trans_sid', '0');
 
-    // Set session cookie parameters for cross-origin support.
-    // NOTE: 'secure' intentionally follows the detected scheme. Forcing it to
-    // true on plain HTTP would make the cookie undeliverable and break login
-    // outright. It flips on automatically under HTTPS; see Phase 7.
+    // SameSite=Lax works for the usual same-origin Railway deployment and for
+    // Railway subdomains (which are same-site). Set SESSION_COOKIE_SAMESITE=None
+    // only when the frontend and API are on genuinely different sites; None
+    // requires Secure cookies, which are available over Railway HTTPS.
+    $sameSite = ucfirst(strtolower(trim((string)(getenv('SESSION_COOKIE_SAMESITE') ?: 'Lax'))));
+    if (!in_array($sameSite, ['Lax', 'Strict', 'None'], true)) {
+        $sameSite = 'Lax';
+    }
+    $secureCookie = $isHttps || $sameSite === 'None';
     session_set_cookie_params([
         'lifetime' => 0,
         'path' => '/',
-        'secure' => $isHttps,
+        'secure' => $secureCookie,
         'httponly' => true,
-        'samesite' => 'Lax'
+        'samesite' => $sameSite
     ]);
     if ($llbUsesPostgres) {
         session_set_save_handler(new LlbPgSessionHandler(), true);
@@ -60,33 +138,97 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Database configuration.
-// Railway's MySQL service exposes MYSQLHOST/MYSQLPORT/MYSQLDATABASE/MYSQLUSER/
-// MYSQLPASSWORD. Prefer the app's DB_* names, but accept Railway's native names
-// as a fallback so deployment works even when DB_* references are omitted.
-// Also recover if a DB_* value was entered as the literal variable label
-// (for example "MYSQLHOST") instead of being inserted as a Railway reference.
-function llbDatabaseEnv(string $appName, string $railwayName, string $default): string {
-    $value = getenv($appName);
-    $value = $value === false ? '' : trim((string)$value);
+// Parse Railway's MYSQL_URL as a fallback for deployments that provide one
+// URL instead of the five split MYSQL* values. DB_* overrides split Railway
+// variables, which override the URL, which finally fall back to XAMPP defaults.
+function llbParseMysqlUrl(): array {
+    static $parsed = null;
+    if (is_array($parsed)) return $parsed;
 
-    if ($value === '' || strtoupper($value) === $railwayName) {
-        $railwayValue = getenv($railwayName);
-        if ($railwayValue !== false && trim((string)$railwayValue) !== '') {
-            return trim((string)$railwayValue);
-        }
+    $raw = trim((string)(getenv('MYSQL_URL') ?: ''));
+    if ($raw === '') return $parsed = [];
+
+    $parts = parse_url($raw);
+    if (!is_array($parts) || !in_array(strtolower((string)($parts['scheme'] ?? '')), ['mysql', 'mariadb'], true)) {
+        error_log('[request:' . ($GLOBALS['LLB_API_REQUEST_ID'] ?? 'unknown') . '] MYSQL_URL is not a valid mysql:// URL.');
+        return $parsed = [];
     }
 
-    return $value !== '' ? $value : $default;
+    $database = ltrim((string)($parts['path'] ?? ''), '/');
+    return $parsed = [
+        'host' => (string)($parts['host'] ?? ''),
+        'port' => (string)($parts['port'] ?? '3306'),
+        'user' => rawurldecode((string)($parts['user'] ?? '')),
+        'pass' => rawurldecode((string)($parts['pass'] ?? '')),
+        'name' => rawurldecode($database),
+    ];
 }
 
-// Use 127.0.0.1 instead of "localhost" for local XAMPP development to avoid
-// slow IPv6/DNS resolution on Windows.
-define('DB_HOST', llbDatabaseEnv('DB_HOST', 'MYSQLHOST', '127.0.0.1'));
-define('DB_USER', llbDatabaseEnv('DB_USER', 'MYSQLUSER', 'root'));
-define('DB_PASS', llbDatabaseEnv('DB_PASS', 'MYSQLPASSWORD', ''));
-define('DB_NAME', llbDatabaseEnv('DB_NAME', 'MYSQLDATABASE', 'llb'));
-define('DB_PORT', (int)llbDatabaseEnv('DB_PORT', 'MYSQLPORT', '3306'));
+function llbIsUnresolvedVariable(string $value): bool {
+    $trimmed = trim($value);
+    return $trimmed === ''
+        || preg_match('/^\$\{\{[^}]+\}\}$/', $trimmed) === 1
+        || preg_match('/^(MYSQLHOST|MYSQLPORT|MYSQLUSER|MYSQLPASSWORD|MYSQLDATABASE|DB_HOST|DB_PORT|DB_USER|DB_PASS|DB_NAME)$/i', $trimmed) === 1;
+}
+
+/**
+ * Return the public frontend base URL for reset links and other emails.
+ * FRONTEND_URL is preferred; FRONTEND_BASE_URL remains a backwards-compatible alias.
+ */
+function getFrontendBaseUrl(): string {
+    $configured = trim((string)(getenv('FRONTEND_URL') ?: getenv('FRONTEND_BASE_URL') ?: ''));
+    if ($configured !== '') {
+        $parts = parse_url($configured);
+        if (is_array($parts)
+            && in_array(strtolower((string)($parts['scheme'] ?? '')), ['http', 'https'], true)
+            && !empty($parts['host'])
+            && !isset($parts['user'])
+            && !isset($parts['pass'])
+        ) {
+            return rtrim($configured, '/');
+        }
+        error_log('[request:' . ($GLOBALS['LLB_API_REQUEST_ID'] ?? 'unknown') . '] FRONTEND_URL must be an http(s) URL.');
+    }
+
+    $host = trim((string)($_SERVER['HTTP_HOST'] ?? ''));
+    if ($host === '' || !preg_match('/^[A-Za-z0-9.\-]+(?::\d{1,5})?$/', $host)) {
+        return '';
+    }
+
+    $forwardedProto = strtolower(trim((string)(explode(',', (string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''))[0] ?? '')));
+    $isHttps = $forwardedProto === 'https'
+        || (!empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off')
+        || !empty(getenv('RAILWAY_ENVIRONMENT_NAME'));
+    return ($isHttps ? 'https://' : 'http://') . $host;
+}
+
+function llbDatabaseEnv(string $appName, string $railwayName, string $urlKey, string $default): string {
+    $urlValues = llbParseMysqlUrl();
+    $appValue = getenv($appName);
+    if ($appValue !== false && !llbIsUnresolvedVariable((string)$appValue)) {
+        return trim((string)$appValue);
+    }
+
+    $railwayValue = getenv($railwayName);
+    if ($railwayValue !== false && !llbIsUnresolvedVariable((string)$railwayValue)) {
+        return trim((string)$railwayValue);
+    }
+
+    $urlValue = (string)($urlValues[$urlKey] ?? '');
+    return !llbIsUnresolvedVariable($urlValue) ? $urlValue : $default;
+}
+
+define('DB_HOST', llbDatabaseEnv('DB_HOST', 'MYSQLHOST', 'host', '127.0.0.1'));
+define('DB_USER', llbDatabaseEnv('DB_USER', 'MYSQLUSER', 'user', 'root'));
+define('DB_PASS', llbDatabaseEnv('DB_PASS', 'MYSQLPASSWORD', 'pass', ''));
+define('DB_NAME', llbDatabaseEnv('DB_NAME', 'MYSQLDATABASE', 'name', 'llb'));
+define('DB_PORT', (int)llbDatabaseEnv('DB_PORT', 'MYSQLPORT', 'port', '3306'));
+
+// Keep existing mail/notification code using FRONTEND_BASE_URL compatible
+// with the Railway-facing FRONTEND_URL variable.
+if (trim((string)(getenv('FRONTEND_BASE_URL') ?: '')) === '' && trim((string)(getenv('FRONTEND_URL') ?: '')) !== '') {
+    putenv('FRONTEND_BASE_URL=' . trim((string)getenv('FRONTEND_URL')));
+}
 
 // Timezone configuration
 date_default_timezone_set('Asia/Manila');
@@ -137,28 +279,37 @@ function getDBConnection() {
                 $useTls ? MYSQLI_CLIENT_SSL : 0
             );
         }
+        if ($conn instanceof mysqli && !$conn->set_charset('utf8mb4')) {
+            throw new RuntimeException('Could not set MySQL connection charset to utf8mb4.');
+        }
     } catch (Throwable $e) {
-        // Keep connection details in Railway/server logs only; never return
-        // driver errors (which may contain infrastructure details) to clients.
-        error_log('Database connection exception [' . $e->getCode() . ']: ' . $e->getMessage());
-        http_response_code(500);
-        die(json_encode([
+        $requestId = (string)($GLOBALS['LLB_API_REQUEST_ID'] ?? 'unknown');
+        error_log('[request:' . $requestId . '] Database connection exception [' . $e->getCode() . ']: ' . $e->getMessage());
+        $status = in_array((int)$e->getCode(), [1045, 1049, 2002, 2003, 2005, 2006, 2013], true) ? 503 : 500;
+        http_response_code($status);
+        header('Content-Type: application/json; charset=UTF-8');
+        echo json_encode([
             'success' => false,
-            'message' => 'Database connection failed. Check the configured database credentials.',
-        ]));
+            'message' => $status === 503
+                ? 'The database is unavailable. Check the Railway database variable references and credentials.'
+                : 'The server could not connect to the database.',
+            'request_id' => $requestId,
+        ], JSON_UNESCAPED_SLASHES);
+        exit;
     }
     
     if ($conn->connect_error) {
-        error_log('Database connection failed [' . $conn->connect_errno . ']: ' . $conn->connect_error);
-        http_response_code(500);
-        die(json_encode([
+        $requestId = (string)($GLOBALS['LLB_API_REQUEST_ID'] ?? 'unknown');
+        error_log('[request:' . $requestId . '] Database connection failed [' . $conn->connect_errno . ']: ' . $conn->connect_error);
+        http_response_code(503);
+        header('Content-Type: application/json; charset=UTF-8');
+        echo json_encode([
             'success' => false,
-            'message' => 'Database connection failed. Check the configured database credentials.'
-        ]));
+            'message' => 'The database is unavailable. Check the Railway database variable references and credentials.',
+            'request_id' => $requestId,
+        ], JSON_UNESCAPED_SLASHES);
+        exit;
     }
-    
-    // Set charset to utf8mb4
-    $conn->set_charset('utf8mb4');
     
     return $conn;
 }

@@ -267,16 +267,9 @@ function sendPayslipReleaseEmails($conn, $payrollIds) {
     if (empty($payrollIds)) return;
 
     try {
-        // Determine base URL for email links
-        $baseUrl = '';
-        if (!empty($_SERVER['HTTP_ORIGIN'])) {
-            $baseUrl = rtrim($_SERVER['HTTP_ORIGIN'], '/');
-        } elseif (!empty($_SERVER['HTTP_REFERER'])) {
-            $parsed = parse_url($_SERVER['HTTP_REFERER']);
-            $baseUrl = ($parsed['scheme'] ?? 'http') . '://' . ($parsed['host'] ?? 'localhost') . (isset($parsed['port']) ? ':' . $parsed['port'] : '');
-        } else {
-            $baseUrl = 'http://localhost:3000';
-        }
+        // Use a configured HTTPS frontend URL for links in email. Origin and
+        // Referer are request-controlled and must not choose an email link host.
+        $baseUrl = function_exists('getFrontendBaseUrl') ? getFrontendBaseUrl() : '';
 
         // Fetch payroll + employee details for released records
         $placeholders = implode(',', array_fill(0, count($payrollIds), '?'));

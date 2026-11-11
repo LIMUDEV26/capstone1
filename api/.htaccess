@@ -1,9 +1,6 @@
 # ── Environment variables passed through to PHP ──────────────────────────────
-# CORS_ALLOWED_ORIGINS and other secrets should be set in the server-level
-# Apache config or httpd.conf (SetEnv / SetEnvIf). The entries below are
-# examples for local dev; REMOVE or override them in production.
-SetEnv CORS_ALLOWED_ORIGINS "http://localhost:3000,http://127.0.0.1:3000"
-SetEnv FRONTEND_BASE_URL "http://localhost:3000"
+# Set production values in Railway Variables. The request host supplies safe
+# localhost defaults for local XAMPP development; do not pin them here.
 # SetEnv SETUP_SECRET "replace-with-a-random-secret"
 # SetEnv DB_USER "llb_app"
 # SetEnv DB_PASS "your-db-password"
@@ -24,7 +21,8 @@ SetEnv SMTP_DEBUG "0"
 <IfModule mod_php.c>
     php_flag display_errors Off
     php_flag display_startup_errors Off
-    php_value error_reporting 0
+    php_flag log_errors On
+    php_value error_reporting 32767
 </IfModule>
 # PHP 8.x (CGI/FPM via mod_proxy_fcgi)
 <IfModule mod_fcgid.c>

@@ -1,4 +1,3 @@
-const DEFAULT_BACKEND_ORIGIN = "http://localhost";
 const DEFAULT_BACKEND_BASE_PATH = "/capstone1";
 const WILDCARD_HOSTS = new Set(["0.0.0.0", "::", "[::]"]);
 const PRIVATE_IPV4_RANGES = [
@@ -82,7 +81,10 @@ export function getBackendOrigin(): string {
     return configured;
   }
 
-  return DEFAULT_BACKEND_ORIGIN;
+  // In a browser, production requests use window.location above. During
+  // static rendering without an explicit backend, keep URLs relative instead
+  // of baking a localhost URL into the production bundle.
+  return "";
 }
 
 export function getBackendBaseUrl(): string {

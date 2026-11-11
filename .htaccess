@@ -31,6 +31,9 @@ RewriteRule "^(package\.json|package-lock\.json|composer\.json|composer\.lock|co
 # (10 internal redirects) and returns a misleading 500 instead of a 404.
 RewriteRule ^out/ - [L]
 
+# Health check endpoint for Railway; keep it ahead of the static-export fallback.
+RewriteRule ^health/?$ capstone1/api/health.php [L,QSA]
+
 RewriteRule ^$ out/ [L]
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d

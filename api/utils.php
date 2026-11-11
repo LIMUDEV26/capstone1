@@ -10,8 +10,8 @@
  *
  * Sources, in order:
  *   1. CORS_ALLOWED_ORIGINS env var — comma-separated, explicit, authoritative.
- *   2. Host-derived defaults — the server's own HTTP_HOST plus localhost /
- *      127.0.0.1 on the dev ports Next.js uses.
+ *   2. Host-derived defaults — the host serving this request. Localhost and
+ *      Next.js development ports are added only outside Railway production.
  *
  * Phase 1.1 removed two things that made this unsafe:
  *   - the "*" wildcard, which reflected ANY origin back together with
@@ -20,9 +20,8 @@
  *   - X-Forwarded-Host as an allowlist source, which let a client widen its own
  *     allowlist with a request header.
  *
- * "*" is now treated as "unset" (warn + fall back) rather than a hard failure,
- * because the tracked api/.htaccess still ships SetEnv CORS_ALLOWED_ORIGINS "*"
- * and 403-ing every request would take the whole app down.
+ * "*" is treated as unset (warn + fall back) rather than accepted, because a
+ * credentialed wildcard would let arbitrary origins read authenticated data.
  *
  * @return array<int, string>
  */
@@ -39,7 +38,7 @@ function getCorsAllowedOrigins() {
             'SECURITY: CORS_ALLOWED_ORIGINS="*" ignored — a credentialed wildcard '
             . 'lets any site read authenticated data. Falling back to host-derived '
             . 'origins. List real origins explicitly, e.g. '
-            . 'SetEnv CORS_ALLOWED_ORIGINS "https://your-tunnel.example"'
+            . 'CORS_ALLOWED_ORIGINS=https://your-frontend.example'
         );
         $envOrigins = '';
     }
@@ -58,22 +57,57 @@ function getCorsAllowedOrigins() {
         }
     }
 
-    // Always allow the host this request was actually served on, plus local dev
-    // ports. This is what keeps localhost / 127.0.0.1 / LAN-IP access and
-    // `next dev` on :3000 working with zero configuration.
+    // Include the explicitly configured frontend when the API is hosted on a
+    // separate origin. CORS stays exact; credentialed wildcard origins remain blocked.
+    $frontendBase = function_exists('getFrontendBaseUrl') ? getFrontendBaseUrl() : '';
+    if ($frontendBase !== '') {
+        $frontendParts = parse_url($frontendBase);
+        if (is_array($frontendParts)
+            && in_array(strtolower((string)($frontendParts['scheme'] ?? '')), ['http', 'https'], true)
+            && !empty($frontendParts['host'])
+        ) {
+            $frontendOrigin = strtolower((string)$frontendParts['scheme']) . '://' . strtolower((string)$frontendParts['host']);
+            if (isset($frontendParts['port'])) {
+                $frontendOrigin .= ':' . (int)$frontendParts['port'];
+            }
+            $origins[] = $frontendOrigin;
+        }
+    }
+
+    // Always allow the host this request was actually served on. Localhost
+    // and Next.js development ports are added only outside Railway production;
+    // production frontends must be listed explicitly above.
     $host = trim((string)($_SERVER['HTTP_HOST'] ?? 'localhost'));
     $bareHost = strtok($host, ':') ?: 'localhost';
 
-    foreach (array_unique([$host, $bareHost, 'localhost', '127.0.0.1']) as $h) {
-        if ($h === '') continue;
-        $origins[] = 'http://' . $h;
-        $origins[] = 'https://' . $h;
+    $isProduction = strtolower(trim((string)(getenv('APP_ENV') ?: ''))) === 'production'
+        || getenv('RAILWAY_ENVIRONMENT_NAME') !== false;
+    $hosts = [$host, $bareHost];
+    if (!$isProduction) {
+        $hosts = array_merge($hosts, ['localhost', '127.0.0.1']);
     }
-    foreach (array_unique([$bareHost, 'localhost', '127.0.0.1']) as $h) {
+    $requestScheme = strtolower(trim((string)(explode(',', (string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''))[0] ?? '')));
+    if (!in_array($requestScheme, ['http', 'https'], true)) {
+        $requestScheme = (!empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off') ? 'https' : 'http';
+    }
+    foreach (array_unique($hosts) as $h) {
         if ($h === '') continue;
-        foreach ([3000, 3001, 3002, 3003, 3004, 3005] as $devPort) {
-            $origins[] = 'http://' . $h . ':' . $devPort;
-            $origins[] = 'https://' . $h . ':' . $devPort;
+        // Railway terminates TLS at its proxy. Trust its forwarded scheme for
+        // this request so production allows the HTTPS origin the browser uses,
+        // without also adding an insecure HTTP origin for the same host.
+        $origins[] = ($isProduction ? 'https' : $requestScheme) . '://' . $h;
+        if (!$isProduction) {
+            $origins[] = 'http://' . $h;
+            $origins[] = 'https://' . $h;
+        }
+    }
+    if (!$isProduction) {
+        foreach (array_unique([$bareHost, 'localhost', '127.0.0.1']) as $h) {
+            if ($h === '') continue;
+            foreach ([3000, 3001, 3002, 3003, 3004, 3005] as $devPort) {
+                $origins[] = 'http://' . $h . ':' . $devPort;
+                $origins[] = 'https://' . $h . ':' . $devPort;
+            }
         }
     }
 
@@ -132,8 +166,11 @@ function getCorsAllowedOrigins() {
         if ($forwardedHost !== '' && preg_match('/^[A-Za-z0-9.\-]+(:\d{1,5})?$/', $forwardedHost)) {
             $forwardedBare = strtok($forwardedHost, ':') ?: $forwardedHost;
             foreach (array_unique([$forwardedHost, $forwardedBare]) as $fh) {
-                $origins[] = 'http://' . $fh;
-                $origins[] = 'https://' . $fh;
+                $origins[] = ($isProduction ? 'https' : $requestScheme) . '://' . $fh;
+                if (!$isProduction) {
+                    $origins[] = 'http://' . $fh;
+                    $origins[] = 'https://' . $fh;
+                }
             }
         }
     }

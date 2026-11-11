@@ -215,7 +215,15 @@ export default function ForgotPasswordPage() {
         body: JSON.stringify({ email: v, ...(captchaToken ? { captchaToken } : {}) }),
       });
 
-      const data: ApiResponse = await res.json();
+      const responseText = await res.text();
+      let data: ApiResponse;
+      try {
+        data = JSON.parse(responseText) as ApiResponse;
+      } catch {
+        console.error('Forgot-password API returned non-JSON response', res.status, responseText.slice(0, 500));
+        setError(`The server returned an unexpected response (HTTP ${res.status}). Check the Railway API logs.`);
+        return;
+      }
 
       if (data.success) {
         if (data.data?.emailCodeSent) {

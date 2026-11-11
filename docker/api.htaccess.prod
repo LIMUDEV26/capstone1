@@ -1,10 +1,12 @@
-# Production environment (Render): all secrets come from service env vars.
-# Do not add SetEnv here - it would shadow Render dashboard variables.
+# Production environment (Railway): configuration comes from service env vars.
+# Do not add SetEnv here - it would shadow Railway Variables.
 
 <IfModule mod_php.c>
     php_flag display_errors Off
     php_flag display_startup_errors Off
-    php_value error_reporting 0
+    php_flag log_errors On
+    php_value error_reporting 32767
+    php_value error_log /dev/stderr
 </IfModule>
 
 <IfModule mod_headers.c>

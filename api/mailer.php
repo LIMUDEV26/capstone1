@@ -66,7 +66,7 @@ function getEmailBranding() {
     $logoCid = $logoPath !== '' ? 'brand-logo' : '';
 
     if ($logoUrl === '') {
-        $frontendBase = trim((string)(getenv('FRONTEND_BASE_URL') ?: ''));
+        $frontendBase = trim((string)(getenv('FRONTEND_URL') ?: getenv('FRONTEND_BASE_URL') ?: ''));
         if ($frontendBase !== '') {
             $logoUrl = rtrim($frontendBase, '/') . '/logo-email.png';
         } else {
@@ -443,10 +443,19 @@ function sendMailViaGmailApi($toEmail, $toName, $subject, $htmlBody, $altBody, $
 
 /** Send an email through Resend's HTTPS API, avoiding outbound SMTP ports. */
 function sendMailViaResend($apiKey, $toEmail, $toName, $subject, $htmlBody, $altBody, $attachments, $cc) {
-    $fromEmail = trim((string)(getenv('RESEND_FROM_EMAIL') ?: getenv('SMTP_FROM_EMAIL') ?: ''));
-    $fromName = trim((string)(getenv('SMTP_FROM_NAME') ?: 'LLB Accountants'));
+    $fromValue = trim((string)(getenv('MAIL_FROM') ?: getenv('RESEND_FROM_EMAIL') ?: getenv('SMTP_FROM_EMAIL') ?: ''));
+    $fromName = trim((string)(getenv('MAIL_FROM_NAME') ?: getenv('SMTP_FROM_NAME') ?: 'LLB Accountants'));
+    $fromEmail = $fromValue;
+    if (preg_match('/^(.+?)\s*<\s*([^<>]+)\s*>$/', $fromValue, $fromMatch)) {
+        $fromName = trim(trim($fromMatch[1]), " \"'");
+        $fromEmail = trim($fromMatch[2]);
+    }
     if ($fromEmail === '' || !filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
-        error_log('sendMail Resend failed: set RESEND_FROM_EMAIL to a valid sender verified with Resend.');
+        error_log('sendMail Resend failed: set MAIL_FROM to a valid sender verified with Resend.');
+        return false;
+    }
+    if (!function_exists('curl_init')) {
+        error_log('sendMail Resend failed: PHP cURL extension is not installed.');
         return false;
     }
 
@@ -521,36 +530,63 @@ function sendMailViaResend($apiKey, $toEmail, $toName, $subject, $htmlBody, $alt
         return false;
     }
 
-    if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
-    $context = stream_context_create([
-        'http' => [
-            'method' => 'POST',
-            'header' => "Content-Type: application/json\r\nAuthorization: Bearer {$apiKey}\r\n",
-            'content' => $json,
-            'timeout' => 30,
-            'ignore_errors' => true,
+    $curl = curl_init('https://api.resend.com/emails');
+    if ($curl === false) {
+        error_log('sendMail Resend failed: could not initialize PHP cURL.');
+        return false;
+    }
+    curl_setopt_array($curl, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $json,
+        CURLOPT_HTTPHEADER => [
+            'Authorization: Bearer ' . $apiKey,
+            'Content-Type: application/json',
+            'Accept: application/json',
         ],
-        'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_SSL_VERIFYHOST => 2,
     ]);
-    $response = @file_get_contents('https://api.resend.com/emails', false, $context);
-    $statusLine = (string)($http_response_header[0] ?? '');
-    if ($response === false || preg_match('/\s2\d\d\s/', $statusLine) !== 1) {
-        // Do not include request headers or the API key in logs.
-        error_log('sendMail Resend failed: ' . ($statusLine !== '' ? $statusLine : 'HTTPS request failed') . '; response=' . substr((string)$response, 0, 500));
+    $response = curl_exec($curl);
+    $statusCode = (int)curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+    $curlError = curl_error($curl);
+    curl_close($curl);
+
+    if ($response === false || $statusCode < 200 || $statusCode >= 300) {
+        // Provider response helps diagnose invalid API keys/senders; never log
+        // the Authorization header or the API key.
+        $requestId = (string)($GLOBALS['LLB_API_REQUEST_ID'] ?? 'unknown');
+        error_log('[request:' . $requestId . '] Resend request failed: HTTP ' . $statusCode
+            . ($curlError !== '' ? '; cURL=' . $curlError : '')
+            . '; response=' . substr((string)$response, 0, 500));
         return false;
     }
     return true;
 }
 
-function sendMail($toEmail, $toName, $subject, $htmlBody, $altBody = '', $attachments = [], $cc = []) {
-    $gmailApiRefreshToken = trim((string)(getenv('GMAIL_API_REFRESH_TOKEN') ?: ''));
-    if ($gmailApiRefreshToken !== '') {
-        return sendMailViaGmailApi($toEmail, $toName, $subject, $htmlBody, $altBody, $attachments, $cc);
+/** Password-reset messages require Resend and never fall back to blocked SMTP. */
+function sendPasswordResetEmail($toEmail, $toName, $subject, $htmlBody, $altBody = ''): bool {
+    $apiKey = trim((string)(getenv('RESEND_API_KEY') ?: ''));
+    if ($apiKey === '') {
+        error_log('[request:' . ($GLOBALS['LLB_API_REQUEST_ID'] ?? 'unknown') . '] Forgot-password email unavailable: RESEND_API_KEY is not configured.');
+        return false;
     }
 
+    return sendMailViaResend($apiKey, $toEmail, $toName, $subject, $htmlBody, $altBody, [], []);
+}
+
+function sendMail($toEmail, $toName, $subject, $htmlBody, $altBody = '', $attachments = [], $cc = []) {
+    // Use HTTPS delivery for application mail on Railway when configured.
     $resendApiKey = trim((string)(getenv('RESEND_API_KEY') ?: ''));
     if ($resendApiKey !== '') {
         return sendMailViaResend($resendApiKey, $toEmail, $toName, $subject, $htmlBody, $altBody, $attachments, $cc);
+    }
+
+    $gmailApiRefreshToken = trim((string)(getenv('GMAIL_API_REFRESH_TOKEN') ?: ''));
+    if ($gmailApiRefreshToken !== '') {
+        return sendMailViaGmailApi($toEmail, $toName, $subject, $htmlBody, $altBody, $attachments, $cc);
     }
 
     $relayUrl = trim((string)(getenv('MAIL_RELAY_URL') ?: ''));

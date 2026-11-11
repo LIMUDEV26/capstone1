@@ -1253,6 +1253,7 @@ function issueLoginOtp($conn, $user) {
             $sent ? 'Login verification code emailed' : 'Login verification code email failed',
             'authentication'
         );
+        return $sent;
     };
 }
 
@@ -1296,11 +1297,17 @@ function handleLogin($conn) {
     // code and hold the sign-in until it is verified (see login_verify_otp).
     storePendingLoginSession($user, getClientBrowserIdentifier(), 'auto', randomAutoCheckDelayMs(), 0, []);
     $mailCallback = issueLoginOtp($conn, $user);
+    if (!$mailCallback()) {
+        sendError('We could not send your verification code. The email service is unavailable; please contact the administrator.', 503, [
+            'field' => 'otp',
+            'code' => 'otp_delivery_failed',
+        ]);
+    }
 
-    sendResponseAndContinue(true, [
+    sendResponse(true, [
         'otp_required' => 1,
         'expires_in' => LOGIN_OTP_TTL_SECONDS,
-    ], 'Credentials verified. A verification code has been sent to your email.', 200, $mailCallback);
+    ], 'Credentials verified. A verification code has been sent to your email.');
 }
 
 /**
@@ -1566,15 +1573,30 @@ function handleLoginRequestOtp($conn) {
         if (!$sent) {
             error_log('Login OTP resend failed for user_id=' . $userId);
         }
+        logActivity(
+            $conn,
+            $userId,
+            'login_otp_email',
+            $sent ? 'Login verification code re-emailed' : 'Login verification code resend email failed',
+            'authentication'
+        );
+        return $sent;
     };
 
     $sentMessage = $alreadySent
         ? 'A new verification code has been sent to your email.'
         : 'A verification code has been sent to your email.';
-    sendResponseAndContinue(true, [
+    if (!$mailCallback()) {
+        sendError('We could not send your verification code. The email service is unavailable; please contact the administrator.', 503, [
+            'field' => 'otp',
+            'code' => 'otp_delivery_failed',
+        ]);
+    }
+
+    sendResponse(true, [
         'otp_required' => 1,
         'expires_in' => LOGIN_OTP_TTL_SECONDS,
-    ], $sentMessage, 200, $mailCallback);
+    ], $sentMessage);
 }
 
 /**
@@ -2240,9 +2262,16 @@ function handleForgotPassword($conn) {
     $_SESSION['admin_forgot_password_user_id'] = (int)$user['id'];
     $_SESSION['admin_forgot_password_totp_verified_at'] = time();
 
-    // Respond immediately, send the email in the background.
-    sendResponseAndContinue(true, ['emailCodeSent' => true],
-        'A verification code has been sent to your email address.', 200, $mailCallback);
+    // Return success only after Resend confirms delivery. The former
+    // background callback reported success before the email request completed.
+    if (!$mailCallback()) {
+        clearAdminForgotPasswordSession();
+        clearAdminForgotPasswordEmailCode($conn, (int)$user['id']);
+        sendError('We could not send the password reset code. Check the email service configuration or contact the administrator.', 503, [
+            'code' => 'email_delivery_failed',
+        ]);
+    }
+    sendResponse(true, ['emailCodeSent' => true], 'A verification code has been sent to your email address.');
 }
 
 /**
@@ -2473,8 +2502,7 @@ function generateAlphaCode($length = 6) {
 }
 
 /**
- * Build the email HTML and write the code to the DB. Returns a closure that
- * sends the mail so callers can fire it inside sendResponseAndContinue.
+ * Build the email HTML and write the code to the DB. Returns a mail closure.
  */
 function prepareAdminForgotPasswordEmailCode($conn, $user): \Closure {
     $userId = (int)$user['id'];
@@ -2498,19 +2526,30 @@ function prepareAdminForgotPasswordEmailCode($conn, $user): \Closure {
 
     $fullName = trim((string)($user['first_name'] ?? '') . ' ' . (string)($user['last_name'] ?? ''));
     $subject  = 'Your password reset verification code';
-    $html     = "<p>Hi " . htmlspecialchars($fullName ?: (string)($user['username'] ?? 'Admin')) . ",</p>"
+    $frontendBase = getFrontendBaseUrl();
+    $resetUrl = $frontendBase !== ''
+        ? rtrim($frontendBase, '/') . '/forgot-password/?email=' . rawurlencode($email)
+        : '';
+    $resetLink = $resetUrl !== ''
+        ? '<p><a href="' . htmlspecialchars($resetUrl, ENT_QUOTES, 'UTF-8') . '">Continue password reset</a></p>'
+        : '';
+    $html     = "<p>Hi " . htmlspecialchars($fullName ?: (string)($user['username'] ?? 'Admin'), ENT_QUOTES, 'UTF-8') . ",</p>"
               . "<p>Your 6-letter verification code is:</p>"
               . "<h2 style=\"letter-spacing:3px\">" . htmlspecialchars($code) . "</h2>"
-              . "<p>This code expires in 10 minutes. If this was not you, secure your account immediately.</p>";
+              . "<p>This code expires in 10 minutes. If this was not you, secure your account immediately.</p>"
+              . $resetLink;
 
     return function () use ($conn, $userId, $email, $fullName, $subject, $html) {
-        $sent = function_exists('sendMail') ? sendMail($email, $fullName, $subject, $html) : false;
+        $sent = function_exists('sendPasswordResetEmail')
+            ? sendPasswordResetEmail($email, $fullName, $subject, $html)
+            : false;
         if (!$sent) {
             error_log('Forgot-password email code failed to send for user_id=' . $userId);
         }
         logActivity($conn, $userId, 'forgot_password_admin_email_code',
             $sent ? 'Sent forgot-password email code' : 'Failed to send forgot-password email code',
             'authentication');
+        return $sent;
     };
 }
 
