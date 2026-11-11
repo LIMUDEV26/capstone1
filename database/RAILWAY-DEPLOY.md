@@ -12,6 +12,21 @@ into Railway before.
 The application also has request-time auth and browser-lockout schema upgrades.
 Those are incremental only; they do not create the entire application schema.
 
+## Repair a missing `settings` table
+
+Railway logs may show `Table 'railway.settings' doesn't exist`. This blocks API
+requests because the shared request limiter writes its defaults to `settings`
+before each endpoint runs. The PHP code now creates this table if it is missing.
+You can also apply the matching migration directly to Railway MySQL:
+
+1. In the repository, open `database/migrations/20261112_create_missing_settings_table.sql`.
+2. Copy all of its contents.
+3. In Railway-connected phpMyAdmin, select the application database (shown as
+   `railway` in the error), then click the **SQL** tab.
+4. Paste the SQL and click **Go** at the bottom.
+5. Confirm the `settings` table appears in the left database tree. The migration
+   is safe to run again and will not erase existing settings.
+
 ## Import the downloaded SQL dump (only if the Railway DB has no app tables)
 
 1. Open Railway and click the **MySQL** service in the project canvas.

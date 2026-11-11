@@ -806,6 +806,20 @@ function ensureRequestRateLimitStorage($conn) {
     if (!$conn || !(isDbConnection($conn))) return;
     if (isPostgresConnection($conn)) return;
 
+    // Some imported production dumps are missing the core settings table.
+    // setCORSHeaders() invokes the rate limiter before an API route runs, so
+    // creating the table here prevents every endpoint from failing with 1146.
+    // IF NOT EXISTS leaves an already imported settings table and its data intact.
+    $conn->query(
+        "CREATE TABLE IF NOT EXISTS settings (
+            setting_key VARCHAR(191) NOT NULL PRIMARY KEY,
+            setting_value LONGTEXT NOT NULL,
+            setting_type VARCHAR(30) NOT NULL DEFAULT 'string',
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
     $conn->query(
         "CREATE TABLE IF NOT EXISTS request_rate_limits (
             client_key VARCHAR(64) NOT NULL PRIMARY KEY,
